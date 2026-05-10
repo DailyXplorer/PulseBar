@@ -106,9 +106,8 @@ The selected signing identity is not issued by Apple:
   $CODE_SIGN_IDENTITY
 
 PulseBar can be signed with a self-signed local certificate, but macOS
-SMAppService still reports the app as unavailable for Open at login. Use an
-Apple Development identity from Xcode for your own Mac, or a Developer ID
-Application identity for public distribution.
+will still treat it differently from an Apple-issued development or distribution
+identity. Use the default local build if you do not need Apple signing.
 EOF
     exit 2
   fi
@@ -117,9 +116,6 @@ fi
 if [[ -z "$TEAM_ID" ]]; then
   cat >&2 <<'EOF'
 Missing DEVELOPMENT_TEAM.
-
-Open at login requires an Apple-issued signing identity. A local self-signed
-certificate is not enough for SMAppService.
 
 Set your Apple Development Team ID, for example:
   DEVELOPMENT_TEAM=ABCDE12345 ./script/install_signed_local.sh
