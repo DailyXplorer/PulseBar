@@ -3,6 +3,9 @@
 # Codex local environment
 .codex/
 
+# Local signing settings
+.pulsebar-signing.env
+
 # Xcode local state
 xcuserdata/
 *.xcuserstate
