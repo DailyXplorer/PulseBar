@@ -11,7 +11,7 @@ PulseBar is a macOS menu bar app for keeping an eye on running applications and 
 - Processes tab: running applications, app icons, PID, CPU usage, resident memory usage, search, and sorting.
 - Guarded quit actions: quit or force quit user applications while protecting PulseBar, Apple apps, and system agents.
 - Monitor tab: CPU, memory, network throughput, and connection quality cards.
-- Settings tab: Open at login using Apple's `SMAppService` when the app is built with an Apple Development or Developer ID signing identity.
+- Settings tab: Open at login using a user LaunchAgent, so local ad-hoc builds can start automatically.
 - About tab: current version, source link, upstream project link, and MIT license link.
 
 <p align="center">
@@ -44,11 +44,11 @@ Build and run the `PulseBar` scheme from Xcode, or build from the command line:
 xcodebuild -project PulseBar.xcodeproj -scheme PulseBar -destination 'platform=macOS,arch=arm64' build
 ```
 
-## Local Signed Install
+## Local Install
 
-Open at login uses Apple's `SMAppService`, which requires an Apple-issued signing identity. A free Apple Development identity created by Xcode is enough for a local install on your own Mac; Developer ID signing and notarization are only needed before publishing a downloadable app.
+Open at login is handled by a user LaunchAgent, so it works for local source builds without Apple signing. Enable it from PulseBar's Settings tab after installing the app.
 
-The default command-line build stays ad-hoc so the project remains easy to clone and build. Once Xcode has your Apple account and Development Team configured, install a signed local copy with:
+The default command-line build stays ad-hoc so the project remains easy to clone and build. If you still want to install an Apple-signed local copy for development, add your Apple account in Xcode and run:
 
 ```bash
 DEVELOPMENT_TEAM=YOURTEAMID ./script/install_signed_local.sh
@@ -69,8 +69,6 @@ DEVELOPMENT_TEAM=YOURTEAMID
 ```
 
 You can also open `PulseBar.xcodeproj`, select the `PulseBar` target, set your Development Team in Signing & Capabilities, then build and copy the app to `/Applications`.
-
-Self-signed local certificates can make `codesign` verification pass, but they do not make `SMAppService` expose Open at login. Use Xcode's Apple Development signing path for personal local installs.
 
 No prebuilt release binary is published yet. A downloadable app should wait until there is a proper Developer ID signing and notarization flow.
 

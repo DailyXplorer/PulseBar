@@ -45,18 +45,6 @@ struct SettingsView: View {
                         ))
                         .labelsHidden()
                         .toggleStyle(.switch)
-                        .disabled(!appSettings.launchAtLoginCanChange)
-                    }
-
-                    if appSettings.launchAtLoginStatus == .requiresApproval {
-                        Divider()
-
-                        Button("Open Login Items") {
-                            appSettings.openLoginItemsSettings()
-                        }
-                        .font(PulseFont.medium(12))
-                        .buttonStyle(.plain)
-                        .foregroundStyle(Color.accentColor)
                     }
 
                     if let errorMessage = appSettings.launchAtLoginErrorMessage {
