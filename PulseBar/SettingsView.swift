@@ -1,8 +1,3 @@
-//
-//  SettingsView.swift
-//  PulseBar
-//
-
 import AppKit
 import SwiftUI
 

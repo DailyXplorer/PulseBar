@@ -1,10 +1,3 @@
-//
-//  PulseBarApp.swift
-//  PulseBar
-//
-//  Created by Ram Patra on 29/07/2025.
-//
-
 import SwiftUI
 
 @main
@@ -29,7 +22,6 @@ struct PulseBarApp: App {
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Hide the app from the dock
         NSApp.setActivationPolicy(.accessory)
     }
 }

@@ -1,10 +1,3 @@
-//
-//  SystemMonitor.swift
-//  PulseBar
-//
-//  Created by Ram Patra on 29/07/2025.
-//
-
 import Foundation
 import AppKit
 import Combine
@@ -43,7 +36,6 @@ class SystemMonitor: ObservableObject {
             }
         }
 
-        // Initial load
         Task { [weak self] in
             await self?.refreshData()
         }
@@ -147,7 +139,6 @@ class SystemMonitor: ObservableObject {
     }
 }
 
-// Mutable sampling state is only accessed through the private serial queue.
 private final class ApplicationMetricsSampler: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.pulsebar.process", qos: .utility)
     private var previousCPUInfo: [Int32: (time: UInt64, timestamp: Date)] = [:]
@@ -227,7 +218,6 @@ private final class ApplicationMetricsSampler: @unchecked Sendable {
         let currentTime = info.pti_total_user + info.pti_total_system
         let currentTimestamp = Date()
 
-        // For first measurement, return 0
         guard let previousInfo = previousCPUInfo[pid] else {
             previousCPUInfo[pid] = (time: currentTime, timestamp: currentTimestamp)
             return 0.0

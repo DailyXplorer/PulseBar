@@ -1,8 +1,3 @@
-//
-//  HugeIconImage.swift
-//  PulseBar
-//
-
 import SwiftUI
 
 enum HugeIcon: String {

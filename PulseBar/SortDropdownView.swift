@@ -1,10 +1,3 @@
-//
-//  SortDropdownView.swift
-//  PulseBar
-//
-//  Created by Ram Patra on 29/07/2025.
-//
-
 import SwiftUI
 
 protocol SortOption: CaseIterable, Hashable {
@@ -24,7 +17,6 @@ struct SortDropdownView<T: SortOption>: View {
     
     var body: some View {
         HStack(spacing: 0) {
-            // Sort option dropdown
             Menu {
                 ForEach(options, id: \.self) { option in
                     Button(action: {
@@ -41,13 +33,11 @@ struct SortDropdownView<T: SortOption>: View {
             .menuStyle(.borderlessButton)
             .padding(.leading, 6)
             
-            // Divider
             Rectangle()
                 .fill(Color.secondary.opacity(0.3))
                 .frame(width: 0.5)
                 .padding(.vertical, 4)
             
-            // Sort order toggle
             Button(action: {
                 isAscending.toggle()
             }) {
@@ -62,11 +52,10 @@ struct SortDropdownView<T: SortOption>: View {
         }
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(6)
-        .frame(height: 32) // Match SearchBoxView height
+        .frame(height: 32)
     }
 }
 
-// Extensions to make existing enums conform to SortOption protocol
 extension ProcessSortOption: SortOption {}
 
 #Preview {

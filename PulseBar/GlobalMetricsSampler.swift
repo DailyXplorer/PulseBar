@@ -1,13 +1,7 @@
-//
-//  GlobalMetricsSampler.swift
-//  PulseBar
-//
-
 import CoreWLAN
 import Darwin
 import Foundation
 
-// Mutable sampling state is only accessed through the private serial queue.
 final class GlobalMetricsSampler: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.pulsebar.global-metrics", qos: .utility)
     private var previousCPUTicks: [UInt64]?
@@ -137,7 +131,6 @@ final class GlobalMetricsSampler: @unchecked Sendable {
         let pageSizeBytes = UInt64(pageSize)
         let totalBytes = ProcessInfo.processInfo.physicalMemory
 
-        // Match Activity Monitor's "Memory Used" more closely by excluding cached files.
         let usedPages = UInt64(info.internal_page_count)
             + UInt64(info.wire_count)
             + UInt64(info.compressor_page_count)

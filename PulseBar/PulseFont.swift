@@ -1,8 +1,3 @@
-//
-//  PulseFont.swift
-//  PulseBar
-//
-
 import SwiftUI
 import AppKit
 

@@ -1,8 +1,3 @@
-//
-//  CustomConfirmationView.swift
-//  PulseBar
-//
-
 import SwiftUI
 
 struct CustomConfirmationView: View {

@@ -1,8 +1,3 @@
-//
-//  AppSettingsStore.swift
-//  PulseBar
-//
-
 import Foundation
 
 @MainActor
