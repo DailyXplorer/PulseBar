@@ -52,6 +52,18 @@ Open at login requires PulseBar to be signed with a real Apple signing identity.
 DEVELOPMENT_TEAM=YOURTEAMID ./script/install_signed_local.sh
 ```
 
+If your keychain only has one Apple signing identity, the script can usually detect the Team ID automatically:
+
+```bash
+./script/install_signed_local.sh
+```
+
+For repeated local installs, you can create an ignored `.pulsebar-signing.env` file:
+
+```bash
+DEVELOPMENT_TEAM=YOURTEAMID
+```
+
 You can also open `PulseBar.xcodeproj`, select the `PulseBar` target, set your Development Team in Signing & Capabilities, then build and copy the app to `/Applications`.
 
 No prebuilt release binary is published yet. A downloadable app should wait until there is a proper Developer ID signing and notarization flow.
