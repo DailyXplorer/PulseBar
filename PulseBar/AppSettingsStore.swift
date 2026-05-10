@@ -33,7 +33,7 @@ final class AppSettingsStore: ObservableObject {
         case .requiresApproval:
             return "Approve PulseBar in Login Items to enable this setting."
         case .notFound:
-            return "Open at login needs a signed build. Set a Development Team in Xcode."
+            return "Open at login needs an Apple-signed build. Set a Development Team in Xcode."
         @unknown default:
             return "The current setting could not be read."
         }
