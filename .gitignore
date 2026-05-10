@@ -1,0 +1,22 @@
+.DS_Store
+
+# Codex local environment
+.codex/
+
+# Xcode local state
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+*.moved-aside
+
+# Build output
+DerivedData/
+build/
+.build/
+
+# Archives and local distribution output
+*.xcarchive
+*.ipa
+*.dSYM.zip
+*.dSYM

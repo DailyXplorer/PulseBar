@@ -1,146 +1,69 @@
-# MissionBar
+# PulseBar
 
-<div align="center">
-  <img src="Docs/Images/mb-1.png" alt="MissionBar Running Processes View" width="600"/>
-</div>
+PulseBar is a macOS menu bar app for keeping an eye on running applications and basic system activity. It is a modified version of the original MIT-licensed MissionBar project.
 
-**MissionBar** is a powerful macOS menu bar application that provides comprehensive system monitoring and application management right from your menu bar. Monitor running processes, manage installed applications, and keep track of system resource usage with an elegant and intuitive interface.
+<p align="center">
+  <img src="Docs/Images/pulsebar-processes.png" alt="PulseBar Processes tab" width="600">
+</p>
 
-## ✨ Features
+## Features
 
-### 🔄 Real-time Process Monitoring
-- **Live Process Tracking**: Monitor all running processes with real-time updates every 2 seconds
-- **Resource Usage**: View CPU usage percentages and memory consumption for each process
-- **Process Management**: Safely terminate processes with confirmation dialogs
-- **Smart Search**: Instantly filter processes by name with live search
-- **Flexible Sorting**: Sort processes by name, CPU usage, or memory usage in ascending/descending order
+- Processes tab: running applications, app icons, PID, CPU usage, resident memory usage, search, and sorting.
+- Guarded quit actions: quit or force quit user applications while protecting PulseBar, Apple apps, and system agents.
+- Monitor tab: CPU, memory, network throughput, and connection quality cards.
+- Settings tab: Open at login using Apple's `SMAppService` when the app is distributed as a signed bundle.
+- About tab: current version, source link, upstream project link, and MIT license link.
 
-### 📱 Application Management
-- **Complete App Inventory**: Browse all installed applications on your system
-- **Storage Analytics**: See how much disk space each application consumes
-- **Version Information**: Check installed versions of your applications
-- **Running Status**: Instantly identify which applications are currently active
-- **Safe Uninstall**: Remove applications directly from the interface (when possible)
+<p align="center">
+  <img src="Docs/Images/pulsebar-monitor.png" alt="PulseBar Monitor tab" width="600">
+</p>
 
-### 🎯 Clean Menu Bar Integration
-- **Minimal Footprint**: Lives quietly in your menu bar without cluttering your dock
-- **Native Design**: Beautiful SwiftUI interface that follows macOS design guidelines
-- **Instant Access**: Quick access to system information with a single click
-- **Smooth Animations**: Polished user experience with fluid transitions and hover effects
+## Refresh Cadence
 
-<div align="center">
-  <img src="Docs/Images/mb-2.png" alt="MissionBar All Applications View" width="600"/>
-</div>
+- Running processes refresh every 5 seconds.
+- Global monitor metrics refresh every 1 second.
+- The toolbar refresh button updates both views immediately.
 
-## 🚀 Getting Started
+## Requirements
 
-### System Requirements
-- macOS 15.0 (Sequoia) or later
-- 64-bit Intel or Apple Silicon Mac
+- macOS 15.0 or later
+- Xcode 16 or later
+- Apple Silicon or Intel Mac
 
-### Installation
+## Build From Source
 
-#### Option 1: Build from Source
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/rampatra/MissionBar.git
-   cd MissionBar
-   ```
+```bash
+git clone https://github.com/DailyXplorer/PulseBar.git
+cd PulseBar
+open PulseBar.xcodeproj
+```
 
-2. Open `MissionBar.xcodeproj` in Xcode
+Build and run the `PulseBar` scheme from Xcode, or build from the command line:
 
-3. Build and run the project (⌘+R)
+```bash
+xcodebuild -project PulseBar.xcodeproj -scheme PulseBar -destination 'platform=macOS,arch=arm64' build
+```
 
-#### Option 2: Download Release
-* Check the [Releases](../../releases) page for pre-built binaries (MissionBar.app file)
+No prebuilt release binary is published yet. A downloadable app should wait until there is a proper Developer ID signing and notarization flow.
 
-### First Launch
-1. After launching, MissionBar will appear in your menu bar
-2. Click the menu bar icon to open the interface
-3. Grant necessary permissions if prompted (for process monitoring)
-4. Start monitoring your system!
+## Development
 
-## 🎮 Usage
+The repository includes `script/build_and_run.sh` for local agent-driven development:
 
-### Monitoring Running Processes
-1. Click the MissionBar icon in your menu bar
-2. The **Running** tab shows all active processes
-3. Use the search box to filter processes by name
-4. Click column headers to sort by name, CPU, or memory usage
-5. Right-click on processes to terminate them (system processes are protected)
+```bash
+./script/build_and_run.sh --verify
+```
 
-### Managing Applications
-1. Switch to the **Applications** tab
-2. Browse your complete application inventory
-3. See storage usage and version information
-4. Identify which apps are currently running
-5. Uninstall applications when possible
+The project keeps Hardened Runtime enabled and does not use App Sandbox, because PulseBar needs to request quit and force quit actions for other user applications in a direct-download macOS distribution.
 
-### Refreshing Data
-- Data refreshes automatically every 2 seconds
-- Click the refresh button (🔄) for manual updates
-- Use ⌘+R keyboard shortcut for quick refresh
+## Attribution
 
-## 🛠 Technology Stack
+PulseBar is based on [Softal-io/MissionBar](https://github.com/Softal-io/MissionBar), created by Ram Patra and released under the MIT License.
 
-- **Language**: Swift
-- **Framework**: SwiftUI
-- **Architecture**: MVVM with ObservableObject
-- **Platform**: macOS (Menu Bar Extra)
-- **Minimum Target**: macOS 13.0
+Original copyright remains with Ram Patra. PulseBar modifications are maintained by DailyXplorer. See [NOTICE.md](NOTICE.md) and [LICENSE](LICENSE).
 
-## 🤝 Contributing
+## Support
 
-Contributions are welcome! Here's how you can help:
+Please use GitHub Issues for bugs and feature requests:
 
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Commit your changes**: `git commit -m 'Add amazing feature'`
-4. **Push to the branch**: `git push origin feature/amazing-feature`
-5. **Open a Pull Request**
-
-### Development Setup
-1. Ensure you have Xcode 14.0 or later installed
-2. Clone the repository and open in Xcode
-3. The project uses Swift Package Manager for dependencies
-4. Build and test your changes before submitting
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 👨‍💻 About the Developer
-
-MissionBar is created by **Ram Patra**, developer of productivity apps including:
-- [**Presentify**](https://presentifyapp.com) - Screen annotation and presentation tool
-- [**FaceScreen**](https://facescreenapp.com) - Add your face to screen recordings
-- [**ToDoBar**](https://todobarapp.com) - Menu bar todo list
-- [**SimpleFill**](https://simplefillapp.com) - Form filling automation
-
-## 🐛 Issues & Support
-
-Found a bug or have a feature request? Please check the [Issues](../../issues) page to see if it's already been reported. If not, feel free to create a new issue with:
-
-- **Bug reports**: Include steps to reproduce, expected behavior, and system information
-- **Feature requests**: Describe the feature and why it would be useful
-- **Questions**: Use the discussion section for general questions
-
-## ⭐ Show Your Support
-
-If you find MissionBar useful, please consider:
-- ⭐ Starring this repository
-- 🐦 Sharing it on social media
-- 🤝 Contributing to the project
-- 💝 Recommending it to friends and colleagues
-
----
-
-<div align="center">
-  <p>Made with ❤️ for the macOS community</p>
-  <p>
-    <a href="https://github.com/rampatra">GitHub</a> •
-    <a href="https://twitter.com/rampatra_">Twitter</a> •
-    <a href="https://linkedin.com/in/ram-patra">LinkedIn</a>
-  </p>
-</div>
-
+https://github.com/DailyXplorer/PulseBar/issues
