@@ -11,7 +11,7 @@ PulseBar is a macOS menu bar app for keeping an eye on running applications and 
 - Processes tab: running applications, app icons, PID, CPU usage, resident memory usage, search, and sorting.
 - Guarded quit actions: quit or force quit user applications while protecting PulseBar, Apple apps, and system agents.
 - Monitor tab: CPU, memory, network throughput, and connection quality cards.
-- Settings tab: Open at login using Apple's `SMAppService` when the app is distributed as a signed bundle.
+- Settings tab: Open at login using Apple's `SMAppService` when the app is built with a real Apple signing identity.
 - About tab: current version, source link, upstream project link, and MIT license link.
 
 <p align="center">
@@ -43,6 +43,16 @@ Build and run the `PulseBar` scheme from Xcode, or build from the command line:
 ```bash
 xcodebuild -project PulseBar.xcodeproj -scheme PulseBar -destination 'platform=macOS,arch=arm64' build
 ```
+
+## Local Signed Install
+
+Open at login requires PulseBar to be signed with a real Apple signing identity. The default command-line build stays ad-hoc so the project remains easy to clone and build, but you can install a signed local copy once Xcode has your Apple account and Development Team configured:
+
+```bash
+DEVELOPMENT_TEAM=YOURTEAMID ./script/install_signed_local.sh
+```
+
+You can also open `PulseBar.xcodeproj`, select the `PulseBar` target, set your Development Team in Signing & Capabilities, then build and copy the app to `/Applications`.
 
 No prebuilt release binary is published yet. A downloadable app should wait until there is a proper Developer ID signing and notarization flow.
 
