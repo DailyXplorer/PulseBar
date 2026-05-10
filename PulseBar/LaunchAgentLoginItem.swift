@@ -1,8 +1,3 @@
-//
-//  LaunchAgentLoginItem.swift
-//  PulseBar
-//
-
 import Darwin
 import Foundation
 
@@ -59,7 +54,20 @@ enum LaunchAgentLoginItem {
         let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
         try data.write(to: agentURL, options: .atomic)
 
-        if !bootstrap() {
+        guard bootstrap() else {
+            do {
+                try removeAgentPlistIfPresent()
+            } catch {
+                throw NSError(
+                    domain: "PulseBarLoginItem",
+                    code: 3,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "launchctl bootstrap failed and PulseBar could not remove the login item plist.",
+                        NSUnderlyingErrorKey: error
+                    ]
+                )
+            }
+
             throw NSError(
                 domain: "PulseBarLoginItem",
                 code: 2,
@@ -70,7 +78,10 @@ enum LaunchAgentLoginItem {
 
     private static func disable() throws {
         _ = bootout()
+        try removeAgentPlistIfPresent()
+    }
 
+    private static func removeAgentPlistIfPresent() throws {
         if FileManager.default.fileExists(atPath: agentURL.path) {
             try FileManager.default.removeItem(at: agentURL)
         }

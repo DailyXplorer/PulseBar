@@ -1,10 +1,3 @@
-//
-//  Models.swift
-//  PulseBar
-//
-//  Created by Ram Patra on 29/07/2025.
-//
-
 import Foundation
 import AppKit
 
@@ -15,7 +8,7 @@ struct RunningProcess: Identifiable, Hashable {
     let bundleIdentifier: String?
     let launchDate: Date?
     let cpuUsage: Double
-    let memoryUsage: UInt64 // in bytes
+    let memoryUsage: UInt64
     let icon: NSImage?
     let isKillable: Bool
     let protectionLabel: String?

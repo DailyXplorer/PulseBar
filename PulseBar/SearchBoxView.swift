@@ -1,10 +1,3 @@
-//
-//  SearchBoxView.swift
-//  PulseBar
-//
-//  Created by Ram Patra on 29/07/2025.
-//
-
 import SwiftUI
 
 struct SearchBoxView: View {

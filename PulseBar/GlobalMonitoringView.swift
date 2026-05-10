@@ -1,8 +1,3 @@
-//
-//  GlobalMonitoringView.swift
-//  PulseBar
-//
-
 import SwiftUI
 
 struct GlobalMonitoringView: View {

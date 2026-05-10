@@ -1,8 +1,3 @@
-//
-//  GlobalSystemMetrics.swift
-//  PulseBar
-//
-
 import Foundation
 
 struct GlobalSystemMetrics: Equatable {
