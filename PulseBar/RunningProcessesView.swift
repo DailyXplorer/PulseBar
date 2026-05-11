@@ -8,11 +8,41 @@ struct RunningProcessesView: View {
     @State private var showingKillConfirmation = false
     @State private var processToKill: RunningProcess?
 
+    private var searchPlaceholder: String {
+        switch systemMonitor.processListMode {
+        case .applications:
+            return "Search applications..."
+        case .allProcesses:
+            return "Search processes..."
+        }
+    }
+
+    private var loadingText: String {
+        switch systemMonitor.processListMode {
+        case .applications:
+            return "Loading applications..."
+        case .allProcesses:
+            return "Loading processes..."
+        }
+    }
+
+    private var emptyText: String {
+        switch systemMonitor.processListMode {
+        case .applications:
+            return searchText.isEmpty ? "No applications found" : "No matching applications"
+        case .allProcesses:
+            return searchText.isEmpty ? "No processes found" : "No matching processes"
+        }
+    }
+
     private var filteredProcesses: [RunningProcess] {
         let filtered = searchText.isEmpty ?
             systemMonitor.runningProcesses :
             systemMonitor.runningProcesses.filter {
-                $0.name.localizedCaseInsensitiveContains(searchText)
+                $0.name.localizedCaseInsensitiveContains(searchText) ||
+                "\($0.pid)".contains(searchText) ||
+                ($0.bundleIdentifier?.localizedCaseInsensitiveContains(searchText) ?? false) ||
+                ($0.executablePath?.localizedCaseInsensitiveContains(searchText) ?? false)
             }
 
         return filtered.sorted(by: sortPredicate)
@@ -50,7 +80,7 @@ struct RunningProcessesView: View {
 
         VStack(spacing: 0) {
             HStack {
-                SearchBoxView(searchText: $searchText, placeholder: "Search applications...")
+                SearchBoxView(searchText: $searchText, placeholder: searchPlaceholder)
 
                 SortDropdownView(selectedOption: $sortBy, isAscending: $sortAscending)
                     .frame(width: 120)
@@ -72,7 +102,7 @@ struct RunningProcessesView: View {
                 VStack {
                     ProgressView()
                         .controlSize(.small)
-                    Text("Loading applications...")
+                    Text(loadingText)
                         .font(PulseFont.regular(12))
                         .foregroundColor(.secondary)
                 }
@@ -81,7 +111,7 @@ struct RunningProcessesView: View {
                 VStack {
                     HugeIconImage(.search01, size: 24)
                         .foregroundColor(.secondary)
-                    Text(searchText.isEmpty ? "No applications found" : "No matching applications")
+                    Text(emptyText)
                         .font(PulseFont.regular(12))
                         .foregroundColor(.secondary)
                 }
@@ -109,9 +139,9 @@ struct RunningProcessesView: View {
         .overlay(
             showingKillConfirmation && processToKill != nil ?
             CustomConfirmationView(
-                title: "Force Quit Application",
-                message: "Are you sure you want to force quit \(processToKill?.name ?? "this application")? This may cause data loss.",
-                destructiveButtonText: "Force Quit",
+                title: processToKill?.terminationKind == .signal ? "Force Kill Process" : "Force Quit Application",
+                message: forceKillMessage(for: processToKill),
+                destructiveButtonText: processToKill?.terminationKind == .signal ? "Force Kill" : "Force Quit",
                 cancelButtonText: "Cancel",
                 onConfirm: {
                     if let process = processToKill {
@@ -126,6 +156,23 @@ struct RunningProcessesView: View {
                 }
             ) : nil
         )
+        .onChange(of: systemMonitor.processListMode) { _, _ in
+            showingKillConfirmation = false
+            processToKill = nil
+        }
+    }
+
+    private func forceKillMessage(for process: RunningProcess?) -> String {
+        guard let process else {
+            return "Are you sure you want to force quit this application? This may cause data loss."
+        }
+
+        switch process.terminationKind {
+        case .signal:
+            return "Are you sure you want to force kill \(process.name) (PID \(process.pid))? This sends SIGKILL and cannot be undone."
+        case .application, .none:
+            return "Are you sure you want to force quit \(process.name)? This may cause data loss."
+        }
     }
 }
 
@@ -136,6 +183,22 @@ struct ProcessRowView: View {
     @State private var isHovered = false
     @State private var terminateHovered = false
     @State private var forceKillHovered = false
+
+    private var terminateHelp: String {
+        guard process.isKillable else {
+            return process.isApplication ? "Protected application" : "Protected process"
+        }
+
+        return process.terminationKind == .signal ? "Terminate process" : "Quit application"
+    }
+
+    private var forceKillHelp: String {
+        guard process.isKillable else {
+            return process.isApplication ? "Protected application" : "Protected process"
+        }
+
+        return process.terminationKind == .signal ? "Force kill process" : "Force quit application"
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -171,10 +234,8 @@ struct ProcessRowView: View {
                                 .cornerRadius(3)
                         }
                     }
-                    if process.bundleIdentifier != nil {
-                        Text("PID: \(process.pid)")
-                            .foregroundColor(.secondary)
-                    }
+                    Text("PID: \(process.pid)")
+                        .foregroundColor(.secondary)
                 }
                 .font(PulseFont.regular(11))
                 .foregroundColor(.secondary)
@@ -195,7 +256,7 @@ struct ProcessRowView: View {
                         .cornerRadius(4)
                 }
                 .buttonStyle(.plain)
-                .help(process.isKillable ? "Quit application" : "Protected application")
+                .help(terminateHelp)
                 .disabled(!process.isKillable)
                 .onHover { hovered in
                     terminateHovered = hovered
@@ -213,7 +274,7 @@ struct ProcessRowView: View {
                         .cornerRadius(4)
                 }
                 .buttonStyle(.plain)
-                .help(process.isKillable ? "Force quit application" : "Protected application")
+                .help(forceKillHelp)
                 .disabled(!process.isKillable)
                 .onHover { hovered in
                     forceKillHovered = hovered

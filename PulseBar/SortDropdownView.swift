@@ -8,13 +8,19 @@ struct SortDropdownView<T: SortOption>: View {
     @Binding var selectedOption: T
     @Binding var isAscending: Bool
     let options: [T]
-    
+    private let height: CGFloat = 32
+    private let separatorGap: CGFloat = 14
+    private let directionIconSize: CGFloat = 12
+    private var directionButtonWidth: CGFloat {
+        directionIconSize + separatorGap * 2
+    }
+
     init(selectedOption: Binding<T>, isAscending: Binding<Bool>) {
         self._selectedOption = selectedOption
         self._isAscending = isAscending
         self.options = Array(T.allCases)
     }
-    
+
     var body: some View {
         HStack(spacing: 0) {
             Menu {
@@ -26,33 +32,39 @@ struct SortDropdownView<T: SortOption>: View {
                     }
                 }
             } label: {
-                Text(selectedOption.displayName)
-                    .font(PulseFont.regular(12))
+                HStack(spacing: 4) {
+                    Text(selectedOption.displayName)
+                        .font(PulseFont.regular(12))
+
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                }
                 .foregroundColor(.primary)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.trailing, separatorGap)
             }
             .menuStyle(.borderlessButton)
-            .padding(.leading, 6)
-            
+            .menuIndicator(.hidden)
+            .frame(maxWidth: .infinity, minHeight: height)
+
             Rectangle()
                 .fill(Color.secondary.opacity(0.3))
                 .frame(width: 0.5)
-                .padding(.vertical, 4)
-            
+                .padding(.vertical, 6)
+
             Button(action: {
                 isAscending.toggle()
             }) {
-                HugeIconImage(isAscending ? .arrowUp01 : .arrowDown01, size: 12)
+                HugeIconImage(isAscending ? .arrowUp01 : .arrowDown01, size: directionIconSize)
                     .foregroundColor(.primary)
-                    .frame(width: 24, height: 24)
+                    .frame(width: directionButtonWidth, height: height)
             }
             .buttonStyle(.plain)
-            .padding(.leading, 2)
-            .padding(.trailing, 4)
             .help(isAscending ? "Sort descending" : "Sort ascending")
         }
         .background(Color(NSColor.controlBackgroundColor))
-        .cornerRadius(6)
-        .frame(height: 32)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .frame(height: height)
     }
 }
 

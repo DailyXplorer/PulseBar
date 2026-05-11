@@ -18,6 +18,19 @@ struct SettingsView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Process list")
+                            .font(PulseFont.medium(13))
+                            .foregroundStyle(.primary)
+
+                        ProcessListModeSelector(
+                            selectedMode: appSettings.processListMode,
+                            onSelect: appSettings.setProcessListMode
+                        )
+                    }
+
+                    Divider()
+
                     HStack(alignment: .center, spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Open at login")
@@ -63,6 +76,53 @@ struct SettingsView: View {
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             appSettings.refresh()
+        }
+    }
+}
+
+private struct ProcessListModeSelector: View {
+    let selectedMode: ProcessListMode
+    let onSelect: (ProcessListMode) -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(ProcessListMode.allCases) { mode in
+                Button {
+                    onSelect(mode)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: mode.systemImage)
+                            .font(.system(size: 12, weight: .semibold))
+
+                        Text(mode.displayName)
+                            .font(PulseFont.medium(12))
+                    }
+                    .foregroundStyle(selectedMode == mode ? Color.primary : Color.secondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(selectedMode == mode ? Color.secondary.opacity(0.14) : Color.clear)
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .help(helpText(for: mode))
+            }
+        }
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.secondary.opacity(0.08))
+        )
+    }
+
+    private func helpText(for mode: ProcessListMode) -> String {
+        switch mode {
+        case .applications:
+            return "Show running applications"
+        case .allProcesses:
+            return "Show every process, including background services"
         }
     }
 }
