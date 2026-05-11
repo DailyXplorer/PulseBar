@@ -11,8 +11,9 @@ struct SortDropdownView<T: SortOption>: View {
     private let height: CGFloat = 32
     private let separatorGap: CGFloat = 14
     private let directionIconSize: CGFloat = 12
+    private let directionIconHorizontalInset: CGFloat = 3
     private var directionButtonWidth: CGFloat {
-        directionIconSize + separatorGap * 2
+        directionIconSize + max(0, separatorGap - directionIconHorizontalInset) * 2
     }
 
     init(selectedOption: Binding<T>, isAscending: Binding<Bool>) {
