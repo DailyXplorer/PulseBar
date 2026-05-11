@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct MenuBarView: View {
+    @EnvironmentObject var appSettings: AppSettingsStore
+    @EnvironmentObject var systemMonitor: SystemMonitor
     @State private var selectedTab: MenuBarTab = .processes
 
     var body: some View {
@@ -29,6 +31,12 @@ struct MenuBarView: View {
         .frame(width: 480, height: 600)
         .background(Color(NSColor.windowBackgroundColor))
         .background(MonitoringLifecycleView())
+        .onAppear {
+            systemMonitor.setProcessListMode(appSettings.processListMode)
+        }
+        .onChange(of: appSettings.processListMode) { _, mode in
+            systemMonitor.setProcessListMode(mode)
+        }
     }
 }
 
@@ -38,12 +46,25 @@ private struct MenuHeaderView: View {
     @State private var hoveredRefresh = false
     @State private var hoveredQuit = false
 
+    private var title: String {
+        guard selectedTab == .processes else {
+            return selectedTab.title
+        }
+
+        switch systemMonitor.processListMode {
+        case .applications:
+            return "Running Applications"
+        case .allProcesses:
+            return "Running Processes"
+        }
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             HugeIconImage(.dashboardSpeed01, size: 16)
                 .foregroundColor(.accentColor)
 
-            Text(selectedTab.title)
+            Text(title)
                 .font(PulseFont.semibold(14))
                 .foregroundColor(.primary)
 
