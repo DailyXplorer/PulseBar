@@ -3,8 +3,8 @@ import SwiftUI
 struct RunningProcessesView: View {
     @EnvironmentObject var systemMonitor: SystemMonitor
     @State private var searchText = ""
-    @State private var sortBy: ProcessSortOption = .name
-    @State private var sortAscending = true
+    @State private var sortBy: ProcessSortOption = .memory
+    @State private var sortAscending = false
     @State private var showingKillConfirmation = false
     @State private var processToKill: RunningProcess?
 
@@ -160,6 +160,9 @@ struct RunningProcessesView: View {
             showingKillConfirmation = false
             processToKill = nil
         }
+        .onChange(of: sortBy) { _, newSortOption in
+            sortAscending = newSortOption == .name
+        }
     }
 
     private func forceKillMessage(for process: RunningProcess?) -> String {
@@ -236,6 +239,10 @@ struct ProcessRowView: View {
                     }
                     Text("PID: \(process.pid)")
                         .foregroundColor(.secondary)
+                    if process.processCount > 1 {
+                        Text("\(process.processCount) processes")
+                            .foregroundColor(.secondary)
+                    }
                 }
                 .font(PulseFont.regular(11))
                 .foregroundColor(.secondary)

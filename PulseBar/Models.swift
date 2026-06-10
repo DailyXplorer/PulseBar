@@ -47,6 +47,7 @@ struct RunningProcess: Identifiable, Hashable {
     let isApplication: Bool
     let terminationKind: ProcessTerminationKind?
     let protectionLabel: String?
+    var processCount: Int = 1
 
     var isKillable: Bool {
         terminationKind != nil && protectionLabel == nil
