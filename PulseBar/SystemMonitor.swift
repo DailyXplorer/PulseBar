@@ -255,6 +255,7 @@ class SystemMonitor: ObservableObject {
 private final class ProcessMetricsSampler: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.pulsebar.process", qos: .utility)
     private var previousCPUInfo: [CPUHistoryKey: (time: UInt64, timestamp: Date)] = [:]
+    private var sampledCPUKeys: Set<CPUHistoryKey> = []
     private var executableIconCache: [String: NSImage] = [:]
 
     func resetCPUHistory() {
@@ -266,6 +267,8 @@ private final class ProcessMetricsSampler: @unchecked Sendable {
     func fetchProcesses(mode: ProcessListMode, excludingBundleIdentifier: String?) async -> [RunningProcess] {
         return await withCheckedContinuation { continuation in
             queue.async {
+                self.sampledCPUKeys.removeAll()
+
                 let processes: [RunningProcess]
 
                 switch mode {
@@ -275,8 +278,7 @@ private final class ProcessMetricsSampler: @unchecked Sendable {
                     processes = self.fetchAllProcesses(excludingBundleIdentifier: excludingBundleIdentifier)
                 }
 
-                let currentKeys = Set(processes.compactMap(CPUHistoryKey.init(process:)))
-                self.previousCPUInfo = self.previousCPUInfo.filter { currentKeys.contains($0.key) }
+                self.previousCPUInfo = self.previousCPUInfo.filter { self.sampledCPUKeys.contains($0.key) }
 
                 continuation.resume(returning: processes.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending })
             }
@@ -284,18 +286,34 @@ private final class ProcessMetricsSampler: @unchecked Sendable {
     }
 
     private func fetchRunningApplications(excludingBundleIdentifier: String?) -> [RunningProcess] {
+        let runningApps = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
+        let applicationPids = Set(runningApps.map(\.processIdentifier))
+
+        var groupedSnapshots: [Int32: [ProcessSnapshot]] = [:]
+        var parentPidCache: [Int32: Int32] = [:]
+        for pid in Self.listPIDs() {
+            guard let snapshot = Self.currentSnapshot(for: pid),
+                  let ownerPid = Self.owningApplicationPid(
+                    for: snapshot,
+                    applicationPids: applicationPids,
+                    parentPidCache: &parentPidCache
+                  ) else { continue }
+
+            groupedSnapshots[ownerPid, default: []].append(snapshot)
+        }
+
         var processes: [RunningProcess] = []
-        let runningApps = NSWorkspace.shared.runningApplications
 
         for app in runningApps {
-            guard let name = app.localizedName,
-                  app.activationPolicy != .prohibited else { continue }
+            guard let name = app.localizedName else { continue }
 
-            let snapshot = Self.currentSnapshot(for: app.processIdentifier)
+            let pid = app.processIdentifier
+            let members = groupedSnapshots[pid] ?? Self.currentSnapshot(for: pid).map { [$0] } ?? []
+            let snapshot = members.first { $0.pid == pid }
             let startTime = snapshot?.startTime ?? app.launchDate.map(ProcessStartTime.init(date:))
             let executablePath = app.executableURL?.path ?? snapshot?.executablePath ?? app.bundleURL?.path
-            let cpuUsage = snapshot.map { self.cpuUsage(for: $0) } ?? 0
-            let memoryUsage = snapshot?.residentMemory ?? 0
+            let cpuUsage = members.reduce(0.0) { $0 + self.cpuUsage(for: $1) }
+            let memoryUsage = members.reduce(UInt64(0)) { $0 + $1.memoryFootprint }
             let protectionLabel = Self.protectionLabel(
                 for: snapshot,
                 runningApplication: app,
@@ -305,7 +323,7 @@ private final class ProcessMetricsSampler: @unchecked Sendable {
             let icon = app.icon ?? icon(for: executablePath)
 
             let process = RunningProcess(
-                pid: app.processIdentifier,
+                pid: pid,
                 name: name,
                 bundleIdentifier: app.bundleIdentifier,
                 launchDate: app.launchDate,
@@ -317,13 +335,75 @@ private final class ProcessMetricsSampler: @unchecked Sendable {
                 icon: icon,
                 isApplication: true,
                 terminationKind: protectionLabel == nil ? .application : nil,
-                protectionLabel: protectionLabel
+                protectionLabel: protectionLabel,
+                processCount: max(members.count, 1)
             )
 
             processes.append(process)
         }
 
         return processes
+    }
+
+    private static func owningApplicationPid(
+        for snapshot: ProcessSnapshot,
+        applicationPids: Set<Int32>,
+        parentPidCache: inout [Int32: Int32]
+    ) -> Int32? {
+        if applicationPids.contains(snapshot.pid) {
+            return snapshot.pid
+        }
+
+        if let responsible = responsiblePid(for: snapshot.pid), applicationPids.contains(responsible) {
+            return responsible
+        }
+
+        var visited: Set<Int32> = [snapshot.pid]
+        var ancestor = snapshot.ppid
+        while ancestor > 1, visited.insert(ancestor).inserted {
+            if applicationPids.contains(ancestor) {
+                return ancestor
+            }
+
+            ancestor = parentPid(for: ancestor, cache: &parentPidCache) ?? 0
+        }
+
+        return nil
+    }
+
+    private static func parentPid(for pid: Int32, cache: inout [Int32: Int32]) -> Int32? {
+        if let cached = cache[pid] {
+            return cached
+        }
+
+        var info = proc_bsdinfo()
+        let size = MemoryLayout<proc_bsdinfo>.size
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, Int32(size)) == size else {
+            return nil
+        }
+
+        let ppid = Int32(info.pbi_ppid)
+        cache[pid] = ppid
+        return ppid
+    }
+
+    private typealias ResponsiblePidFunction = @convention(c) (pid_t) -> pid_t
+
+    private static let responsiblePidFunction: ResponsiblePidFunction? = {
+        guard let symbol = dlsym(dlopen(nil, RTLD_NOW), "responsibility_get_pid_responsible_for_pid") else {
+            return nil
+        }
+
+        return unsafeBitCast(symbol, to: ResponsiblePidFunction.self)
+    }()
+
+    private static func responsiblePid(for pid: Int32) -> Int32? {
+        guard let function = responsiblePidFunction else { return nil }
+
+        let responsible = function(pid)
+        guard responsible > 0, responsible != pid else { return nil }
+
+        return responsible
     }
 
     private func fetchAllProcesses(excludingBundleIdentifier: String?) -> [RunningProcess] {
@@ -362,7 +442,7 @@ private final class ProcessMetricsSampler: @unchecked Sendable {
                 executablePath: snapshot.executablePath,
                 uid: snapshot.uid,
                 cpuUsage: self.cpuUsage(for: snapshot),
-                memoryUsage: snapshot.residentMemory,
+                memoryUsage: snapshot.memoryFootprint,
                 icon: icon,
                 isApplication: isApplication,
                 terminationKind: terminationKind,
@@ -442,10 +522,19 @@ private final class ProcessMetricsSampler: @unchecked Sendable {
         return nil
     }
 
+    private static let machTimebaseScale: Double = {
+        var timebase = mach_timebase_info_data_t()
+        mach_timebase_info(&timebase)
+        guard timebase.denom != 0 else { return 1 }
+
+        return Double(timebase.numer) / Double(timebase.denom)
+    }()
+
     private func cpuUsage(for snapshot: ProcessSnapshot) -> Double {
         let currentTime = snapshot.cpuTime
         let currentTimestamp = Date()
         let key = CPUHistoryKey(pid: snapshot.pid, startTime: snapshot.startTime)
+        sampledCPUKeys.insert(key)
 
         guard let previousInfo = previousCPUInfo[key] else {
             previousCPUInfo[key] = (time: currentTime, timestamp: currentTimestamp)
@@ -459,7 +548,8 @@ private final class ProcessMetricsSampler: @unchecked Sendable {
 
         guard deltaTime > 0 else { return 0.0 }
 
-        let cpuPercent = (Double(deltaCPUTime) / 1_000_000_000.0) / deltaTime * 100.0
+        let deltaCPUSeconds = Double(deltaCPUTime) * Self.machTimebaseScale / 1_000_000_000.0
+        let cpuPercent = deltaCPUSeconds / deltaTime * 100.0
 
         return max(0.0, cpuPercent)
     }
@@ -538,13 +628,14 @@ private final class ProcessMetricsSampler: @unchecked Sendable {
 
 private struct ProcessSnapshot {
     let pid: Int32
+    let ppid: Int32
     let name: String
     let uid: uid_t
     let flags: UInt32
     let startTime: ProcessStartTime
     let executablePath: String?
     let cpuTime: UInt64
-    let residentMemory: UInt64
+    let memoryFootprint: UInt64
 
     init(info: proc_taskallinfo) {
         let pid = Int32(info.pbsd.pbi_pid)
@@ -555,6 +646,7 @@ private struct ProcessSnapshot {
         let name = [registeredName, executableName, commandName].first { !$0.isEmpty } ?? "PID \(pid)"
 
         self.pid = pid
+        self.ppid = Int32(info.pbsd.pbi_ppid)
         self.name = name
         self.uid = info.pbsd.pbi_uid
         self.flags = info.pbsd.pbi_flags
@@ -564,25 +656,24 @@ private struct ProcessSnapshot {
         )
         self.executablePath = executablePath
         self.cpuTime = info.ptinfo.pti_total_user + info.ptinfo.pti_total_system
-        self.residentMemory = info.ptinfo.pti_resident_size
+        self.memoryFootprint = Self.physicalFootprint(for: pid) ?? info.ptinfo.pti_resident_size
+    }
+
+    private static func physicalFootprint(for pid: Int32) -> UInt64? {
+        var usage = rusage_info_current()
+        let result = withUnsafeMutablePointer(to: &usage) { pointer in
+            pointer.withMemoryRebound(to: (rusage_info_t?).self, capacity: 1) { reboundPointer in
+                proc_pid_rusage(pid, RUSAGE_INFO_CURRENT, reboundPointer)
+            }
+        }
+
+        guard result == 0 else { return nil }
+
+        return usage.ri_phys_footprint
     }
 }
 
 private struct CPUHistoryKey: Hashable {
     let pid: Int32
     let startTime: ProcessStartTime
-
-    init(pid: Int32, startTime: ProcessStartTime) {
-        self.pid = pid
-        self.startTime = startTime
-    }
-
-    init?(process: RunningProcess) {
-        guard let startTime = process.startTime else {
-            return nil
-        }
-
-        self.pid = process.pid
-        self.startTime = startTime
-    }
 }
