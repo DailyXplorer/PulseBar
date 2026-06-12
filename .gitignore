@@ -3,6 +3,10 @@
 # Codex local environment
 .codex/
 
+# Local agent state
+.claude/
+.agents/
+
 # Local signing settings
 .pulsebar-signing.env
 
@@ -19,6 +23,7 @@ build/
 .build/
 
 # Archives and local distribution output
+dist/
 *.xcarchive
 *.ipa
 *.dSYM.zip
