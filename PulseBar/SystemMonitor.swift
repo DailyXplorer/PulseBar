@@ -2,22 +2,31 @@ import Darwin
 import Foundation
 import AppKit
 import Combine
+import PulseBarCore
+
+enum MonitoringCadence {
+    case foreground
+    case background
+    case off
+}
 
 @MainActor
 class SystemMonitor: ObservableObject {
     @Published var runningProcesses: [RunningProcess] = []
-    @Published var globalMetrics: GlobalSystemMetrics?
     @Published var isLoading = false
     @Published var actionMessage: String?
     @Published private(set) var processListMode: ProcessListMode = .applications
+    let globalMetricsStore = GlobalMetricsStore()
 
     private var processTimer: Timer?
     private var globalMetricsTimer: Timer?
+    private var cadence: MonitoringCadence = .off
     private let metricsSampler = ProcessMetricsSampler()
     private let globalMetricsSampler = GlobalMetricsSampler()
     private let applicationRefreshInterval: TimeInterval = 5.0
     private let allProcessesRefreshInterval: TimeInterval = 10.0
     private let globalMetricsRefreshInterval: TimeInterval = 1.0
+    private let backgroundGlobalMetricsRefreshInterval: TimeInterval = 5.0
 
     private var processRefreshInterval: TimeInterval {
         switch processListMode {
@@ -34,24 +43,59 @@ class SystemMonitor: ObservableObject {
     }
 
     func startMonitoring() {
-        stopMonitoring()
-        scheduleProcessTimer()
+        setCadence(.foreground)
+    }
 
-        globalMetricsTimer = Timer.scheduledTimer(withTimeInterval: globalMetricsRefreshInterval, repeats: true) { [weak self] _ in
+    func stopMonitoring() {
+        setCadence(.off)
+    }
+
+    func applyMenuBarCPUMode(_ isEnabled: Bool) {
+        guard cadence != .foreground else { return }
+
+        setCadence(isEnabled ? .background : .off)
+    }
+
+    func setCadence(_ newCadence: MonitoringCadence) {
+        guard cadence != newCadence else { return }
+
+        cadence = newCadence
+        processTimer?.invalidate()
+        processTimer = nil
+        globalMetricsTimer?.invalidate()
+        globalMetricsTimer = nil
+
+        switch newCadence {
+        case .foreground:
+            scheduleProcessTimer()
+            scheduleGlobalMetricsTimer(interval: globalMetricsRefreshInterval)
+
+            Task { [weak self] in
+                await self?.refreshData()
+            }
+        case .background:
+            scheduleGlobalMetricsTimer(interval: backgroundGlobalMetricsRefreshInterval)
+
+            Task { [weak self] in
+                await self?.refreshGlobalMetrics()
+            }
+        case .off:
+            break
+        }
+    }
+
+    private func scheduleGlobalMetricsTimer(interval: TimeInterval) {
+        globalMetricsTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task {
                 await self?.refreshGlobalMetrics()
             }
-        }
-
-        Task { [weak self] in
-            await self?.refreshData()
         }
     }
 
     func setProcessListMode(_ mode: ProcessListMode) {
         guard processListMode != mode else { return }
 
-        let shouldRescheduleProcessTimer = processTimer != nil
+        let shouldRescheduleProcessTimer = cadence == .foreground
 
         processListMode = mode
         actionMessage = nil
@@ -77,14 +121,6 @@ class SystemMonitor: ObservableObject {
         }
     }
 
-    func stopMonitoring() {
-        processTimer?.invalidate()
-        processTimer = nil
-
-        globalMetricsTimer?.invalidate()
-        globalMetricsTimer = nil
-    }
-
     func refreshData() async {
         isLoading = true
         let mode = processListMode
@@ -102,7 +138,7 @@ class SystemMonitor: ObservableObject {
         }
 
         if let fetchedGlobalMetrics = await fetchedGlobalMetrics {
-            globalMetrics = fetchedGlobalMetrics
+            globalMetricsStore.metrics = fetchedGlobalMetrics
         }
         if isCurrentMode {
             isLoading = false
@@ -125,7 +161,7 @@ class SystemMonitor: ObservableObject {
 
     func refreshGlobalMetrics() async {
         if let fetchedGlobalMetrics = await globalMetricsSampler.fetchGlobalMetrics() {
-            globalMetrics = fetchedGlobalMetrics
+            globalMetricsStore.metrics = fetchedGlobalMetrics
         }
     }
 
@@ -254,20 +290,19 @@ class SystemMonitor: ObservableObject {
 
 private final class ProcessMetricsSampler: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.pulsebar.process", qos: .utility)
-    private var previousCPUInfo: [CPUHistoryKey: (time: UInt64, timestamp: Date)] = [:]
-    private var sampledCPUKeys: Set<CPUHistoryKey> = []
+    private let cpuTracker = ProcessCPUTracker()
     private var executableIconCache: [String: NSImage] = [:]
 
     func resetCPUHistory() {
         queue.async {
-            self.previousCPUInfo.removeAll()
+            self.cpuTracker.reset()
         }
     }
 
     func fetchProcesses(mode: ProcessListMode, excludingBundleIdentifier: String?) async -> [RunningProcess] {
         return await withCheckedContinuation { continuation in
             queue.async {
-                self.sampledCPUKeys.removeAll()
+                self.cpuTracker.beginSample()
 
                 let processes: [RunningProcess]
 
@@ -278,7 +313,7 @@ private final class ProcessMetricsSampler: @unchecked Sendable {
                     processes = self.fetchAllProcesses(excludingBundleIdentifier: excludingBundleIdentifier)
                 }
 
-                self.previousCPUInfo = self.previousCPUInfo.filter { self.sampledCPUKeys.contains($0.key) }
+                self.cpuTracker.endSample()
 
                 continuation.resume(returning: processes.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending })
             }
@@ -310,7 +345,7 @@ private final class ProcessMetricsSampler: @unchecked Sendable {
             let pid = app.processIdentifier
             let members = groupedSnapshots[pid] ?? Self.currentSnapshot(for: pid).map { [$0] } ?? []
             let snapshot = members.first { $0.pid == pid }
-            let startTime = snapshot?.startTime ?? app.launchDate.map(ProcessStartTime.init(date:))
+            let startTime = snapshot?.startTime
             let executablePath = app.executableURL?.path ?? snapshot?.executablePath ?? app.bundleURL?.path
             let cpuUsage = members.reduce(0.0) { $0 + self.cpuUsage(for: $1) }
             let memoryUsage = members.reduce(UInt64(0)) { $0 + $1.memoryFootprint }
@@ -350,25 +385,94 @@ private final class ProcessMetricsSampler: @unchecked Sendable {
         applicationPids: Set<Int32>,
         parentPidCache: inout [Int32: Int32]
     ) -> Int32? {
-        if applicationPids.contains(snapshot.pid) {
-            return snapshot.pid
+        ProcessGrouping.owningApplicationPid(
+            pid: snapshot.pid,
+            ppid: snapshot.ppid,
+            applicationPids: applicationPids,
+            responsiblePid: { responsiblePid(for: $0) },
+            parentPid: { parentPid(for: $0, cache: &parentPidCache) }
+        )
+    }
+
+    private static func permissionDenied(for pid: Int32) -> Bool {
+        errno = 0
+        return Darwin.kill(pid, 0) == -1 && errno == EPERM
+    }
+
+    private static func protectionSubject(
+        for snapshot: ProcessSnapshot?,
+        runningApplication app: NSRunningApplication?
+    ) -> ProtectionSubject {
+        let pid = snapshot?.pid ?? app?.processIdentifier ?? -1
+        let executablePath = snapshot?.executablePath ?? app?.executableURL?.path ?? app?.bundleURL?.path
+        let isRegularActivationPolicy = app.map { $0.activationPolicy == .regular }
+
+        return ProtectionSubject(
+            pid: pid,
+            uid: snapshot?.uid,
+            isSystemFlagSet: snapshot.map { ($0.flags & UInt32(PROC_FLAG_SYSTEM)) != 0 } ?? false,
+            hasSnapshot: snapshot != nil,
+            bundleIdentifier: app?.bundleIdentifier,
+            isRegularActivationPolicy: isRegularActivationPolicy,
+            executablePath: executablePath
+        )
+    }
+
+    fileprivate static func protectionLabel(
+        for snapshot: ProcessSnapshot?,
+        runningApplication app: NSRunningApplication?,
+        excludingBundleIdentifier: String?
+    ) -> String? {
+        protectionLabel(
+            for: snapshot,
+            runningApplication: app,
+            excludingBundleIdentifier: excludingBundleIdentifier,
+            protectLegacyApplicationPaths: false
+        )
+    }
+
+    fileprivate static func protectionLabel(
+        for snapshot: ProcessSnapshot?,
+        runningApplication app: NSRunningApplication?,
+        excludingBundleIdentifier: String?,
+        protectLegacyApplicationPaths: Bool
+    ) -> String? {
+        ProcessProtection.label(
+            for: protectionSubject(for: snapshot, runningApplication: app),
+            currentPid: getpid(),
+            excludingBundleIdentifier: excludingBundleIdentifier,
+            protectLegacyApplicationPaths: protectLegacyApplicationPaths,
+            permissionDenied: { permissionDenied(for: $0) }
+        )
+    }
+
+    private static let machTimebaseScale: Double = {
+        var timebase = mach_timebase_info_data_t()
+        mach_timebase_info(&timebase)
+        guard timebase.denom != 0 else { return 1 }
+
+        return Double(timebase.numer) / Double(timebase.denom)
+    }()
+
+    private func cpuUsage(for snapshot: ProcessSnapshot) -> Double {
+        cpuTracker.cpuPercent(
+            key: ProcessCPUKey(pid: snapshot.pid, startTime: snapshot.startTime),
+            cpuTime: snapshot.cpuTime,
+            timestamp: Date(),
+            timebaseScale: Self.machTimebaseScale
+        )
+    }
+
+    private func icon(for executablePath: String?) -> NSImage? {
+        guard let executablePath else { return nil }
+
+        if let cachedIcon = executableIconCache[executablePath] {
+            return cachedIcon
         }
 
-        if let responsible = responsiblePid(for: snapshot.pid), applicationPids.contains(responsible) {
-            return responsible
-        }
-
-        var visited: Set<Int32> = [snapshot.pid]
-        var ancestor = snapshot.ppid
-        while ancestor > 1, visited.insert(ancestor).inserted {
-            if applicationPids.contains(ancestor) {
-                return ancestor
-            }
-
-            ancestor = parentPid(for: ancestor, cache: &parentPidCache) ?? 0
-        }
-
-        return nil
+        let icon = NSWorkspace.shared.icon(forFile: executablePath)
+        executableIconCache[executablePath] = icon
+        return icon
     }
 
     private static func parentPid(for pid: Int32, cache: inout [Int32: Int32]) -> Int32? {
@@ -464,108 +568,6 @@ private final class ProcessMetricsSampler: @unchecked Sendable {
         return ProcessSnapshot(info: info)
     }
 
-    fileprivate static func protectionLabel(
-        for snapshot: ProcessSnapshot?,
-        runningApplication app: NSRunningApplication?,
-        excludingBundleIdentifier: String?
-    ) -> String? {
-        protectionLabel(
-            for: snapshot,
-            runningApplication: app,
-            excludingBundleIdentifier: excludingBundleIdentifier,
-            protectLegacyApplicationPaths: false
-        )
-    }
-
-    fileprivate static func protectionLabel(
-        for snapshot: ProcessSnapshot?,
-        runningApplication app: NSRunningApplication?,
-        excludingBundleIdentifier: String?,
-        protectLegacyApplicationPaths: Bool
-    ) -> String? {
-        let pid = snapshot?.pid ?? app?.processIdentifier ?? -1
-
-        if pid == getpid() || app?.bundleIdentifier == excludingBundleIdentifier {
-            return "PulseBar"
-        }
-
-        if pid <= 1 {
-            return "System"
-        }
-
-        if let snapshot, (snapshot.flags & UInt32(PROC_FLAG_SYSTEM)) != 0 {
-            return "System"
-        }
-
-        if snapshot?.uid == 0 {
-            return "Root"
-        }
-
-        if let app, app.activationPolicy != .regular {
-            return "Protected"
-        }
-
-        if app?.bundleIdentifier?.hasPrefix("com.apple.") == true {
-            return "Apple"
-        }
-
-        let executablePath = snapshot?.executablePath ?? app?.executableURL?.path ?? app?.bundleURL?.path
-        if let executablePath, isSystemPath(executablePath, protectLegacyApplicationPaths: protectLegacyApplicationPaths) {
-            return "System"
-        }
-
-        errno = 0
-        if Darwin.kill(pid, 0) == -1 && errno == EPERM {
-            return "No Permission"
-        }
-
-        return nil
-    }
-
-    private static let machTimebaseScale: Double = {
-        var timebase = mach_timebase_info_data_t()
-        mach_timebase_info(&timebase)
-        guard timebase.denom != 0 else { return 1 }
-
-        return Double(timebase.numer) / Double(timebase.denom)
-    }()
-
-    private func cpuUsage(for snapshot: ProcessSnapshot) -> Double {
-        let currentTime = snapshot.cpuTime
-        let currentTimestamp = Date()
-        let key = CPUHistoryKey(pid: snapshot.pid, startTime: snapshot.startTime)
-        sampledCPUKeys.insert(key)
-
-        guard let previousInfo = previousCPUInfo[key] else {
-            previousCPUInfo[key] = (time: currentTime, timestamp: currentTimestamp)
-            return 0.0
-        }
-
-        let deltaTime = currentTimestamp.timeIntervalSince(previousInfo.timestamp)
-        let deltaCPUTime = currentTime > previousInfo.time ? currentTime - previousInfo.time : 0
-
-        previousCPUInfo[key] = (time: currentTime, timestamp: currentTimestamp)
-
-        guard deltaTime > 0 else { return 0.0 }
-
-        let deltaCPUSeconds = Double(deltaCPUTime) * Self.machTimebaseScale / 1_000_000_000.0
-        let cpuPercent = deltaCPUSeconds / deltaTime * 100.0
-
-        return max(0.0, cpuPercent)
-    }
-
-    private func icon(for executablePath: String?) -> NSImage? {
-        guard let executablePath else { return nil }
-
-        if let cachedIcon = executableIconCache[executablePath] {
-            return cachedIcon
-        }
-
-        let icon = NSWorkspace.shared.icon(forFile: executablePath)
-        executableIconCache[executablePath] = icon
-        return icon
-    }
-
     private static func listPIDs() -> [Int32] {
         let requiredBytes = proc_listpids(UInt32(PROC_ALL_PIDS), 0, nil, 0)
         guard requiredBytes > 0 else { return [] }
@@ -585,20 +587,6 @@ private final class ProcessMetricsSampler: @unchecked Sendable {
 
         let count = Int(bytesWritten) / MemoryLayout<pid_t>.stride
         return pids.prefix(count).filter { $0 >= 0 }
-    }
-
-    private static func isSystemPath(_ path: String, protectLegacyApplicationPaths: Bool) -> Bool {
-        let normalizedPath = (path as NSString).standardizingPath
-
-        if protectLegacyApplicationPaths,
-           normalizedPath.hasPrefix("/System/") || normalizedPath.hasPrefix("/usr/") {
-            return true
-        }
-
-        let systemPrefixes = ["/System", "/bin", "/sbin", "/usr/bin", "/usr/sbin", "/usr/libexec"]
-        return systemPrefixes.contains { prefix in
-            normalizedPath == prefix || normalizedPath.hasPrefix(prefix + "/")
-        }
     }
 
     fileprivate static func executablePath(for pid: Int32) -> String? {
@@ -671,9 +659,4 @@ private struct ProcessSnapshot {
 
         return usage.ri_phys_footprint
     }
-}
-
-private struct CPUHistoryKey: Hashable {
-    let pid: Int32
-    let startTime: ProcessStartTime
 }

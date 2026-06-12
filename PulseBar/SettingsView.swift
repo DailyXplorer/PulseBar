@@ -32,6 +32,23 @@ struct SettingsView: View {
                     Divider()
 
                     HStack(alignment: .center, spacing: 12) {
+                        Text("Show CPU in menu bar")
+                            .font(PulseFont.medium(13))
+                            .foregroundStyle(.primary)
+
+                        Spacer(minLength: 12)
+
+                        Toggle("", isOn: Binding(
+                            get: { appSettings.showMenuBarCPU },
+                            set: { appSettings.setShowMenuBarCPU($0) }
+                        ))
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                    }
+
+                    Divider()
+
+                    HStack(alignment: .center, spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Open at login")
                                 .font(PulseFont.medium(13))

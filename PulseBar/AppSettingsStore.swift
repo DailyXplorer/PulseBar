@@ -29,9 +29,11 @@ enum ProcessListMode: String, CaseIterable, Identifiable {
 final class AppSettingsStore: ObservableObject {
     private enum DefaultsKey {
         static let processListMode = "processListMode"
+        static let showMenuBarCPU = "showMenuBarCPU"
     }
 
     @Published private(set) var processListMode: ProcessListMode
+    @Published private(set) var showMenuBarCPU: Bool
     @Published private(set) var launchAtLoginEnabled = false
     @Published var launchAtLoginErrorMessage: String?
 
@@ -40,6 +42,7 @@ final class AppSettingsStore: ObservableObject {
             .flatMap(ProcessListMode.init(rawValue:))
 
         processListMode = storedMode ?? .applications
+        showMenuBarCPU = UserDefaults.standard.bool(forKey: DefaultsKey.showMenuBarCPU)
         refresh()
     }
 
@@ -68,5 +71,12 @@ final class AppSettingsStore: ObservableObject {
 
         processListMode = mode
         UserDefaults.standard.set(mode.rawValue, forKey: DefaultsKey.processListMode)
+    }
+
+    func setShowMenuBarCPU(_ isEnabled: Bool) {
+        guard showMenuBarCPU != isEnabled else { return }
+
+        showMenuBarCPU = isEnabled
+        UserDefaults.standard.set(isEnabled, forKey: DefaultsKey.showMenuBarCPU)
     }
 }

@@ -153,16 +153,17 @@ private struct MenuTabBar: View {
 }
 
 private struct MonitoringLifecycleView: View {
+    @EnvironmentObject var appSettings: AppSettingsStore
     @EnvironmentObject var systemMonitor: SystemMonitor
 
     var body: some View {
         Color.clear
             .frame(width: 0, height: 0)
             .onAppear {
-                systemMonitor.startMonitoring()
+                systemMonitor.setCadence(.foreground)
             }
             .onDisappear {
-                systemMonitor.stopMonitoring()
+                systemMonitor.setCadence(appSettings.showMenuBarCPU ? .background : .off)
             }
     }
 }

@@ -1,6 +1,7 @@
 import CoreWLAN
 import Darwin
 import Foundation
+import PulseBarCore
 
 final class GlobalMetricsSampler: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.pulsebar.global-metrics", qos: .utility)
@@ -28,7 +29,7 @@ final class GlobalMetricsSampler: @unchecked Sendable {
                 return nil
             }
 
-            return calculateCPUUsage(previousTicks: previousTicks, currentTicks: currentTicks)
+            return GlobalMetricsMath.cpuUsagePercent(previousTicks: previousTicks, currentTicks: currentTicks)
         }
 
         let networkRates = network.flatMap { currentSample -> NetworkRates? in
@@ -45,7 +46,7 @@ final class GlobalMetricsSampler: @unchecked Sendable {
             return nil
         }
 
-        let connectionQuality = calculateConnectionQuality(
+        let connectionQuality = GlobalMetricsMath.connectionQuality(
             isConnected: network?.isConnected == true,
             totalBytesPerSecond: networkRates.downloadBytesPerSecond + networkRates.uploadBytesPerSecond,
             wifiQualityPercent: wifiQualityPercent()
@@ -86,25 +87,6 @@ final class GlobalMetricsSampler: @unchecked Sendable {
             UInt64(info.cpu_ticks.2),
             UInt64(info.cpu_ticks.3)
         ]
-    }
-
-    private func calculateCPUUsage(previousTicks: [UInt64], currentTicks: [UInt64]) -> Double {
-        guard previousTicks.count == currentTicks.count, currentTicks.count >= 4 else {
-            return 0
-        }
-
-        let deltas = zip(previousTicks, currentTicks).map { previous, current in
-            current >= previous ? current - previous : 0
-        }
-
-        let totalDelta = deltas.reduce(0, +)
-        guard totalDelta > 0 else {
-            return 0
-        }
-
-        let idleDelta = deltas[Int(CPU_STATE_IDLE)]
-        let activeDelta = totalDelta > idleDelta ? totalDelta - idleDelta : 0
-        return (Double(activeDelta) / Double(totalDelta)) * 100
     }
 
     private func readMemoryUsage() -> MemorySample? {
@@ -168,7 +150,7 @@ final class GlobalMetricsSampler: @unchecked Sendable {
             }
 
             let interfaceName = String(cString: namePointer)
-            guard shouldIncludeInterface(named: interfaceName),
+            guard GlobalMetricsMath.shouldIncludeInterface(named: interfaceName),
                   let address = interface.ifa_addr else {
                 continue
             }
@@ -199,44 +181,30 @@ final class GlobalMetricsSampler: @unchecked Sendable {
         )
     }
 
-    private func shouldIncludeInterface(named name: String) -> Bool {
-        let excludedNames = ["lo0"]
-        let excludedPrefixes = [
-            "awdl", "bridge", "docker", "gif", "ipsec", "llw", "p2p",
-            "stf", "tap", "tun", "utun", "vboxnet", "vnic", "vmnet"
-        ]
-
-        if excludedNames.contains(name) {
-            return false
-        }
-
-        return !excludedPrefixes.contains { name.hasPrefix($0) }
-    }
-
     private func calculateNetworkRates(
         previousSample: NetworkSample,
         currentSample: NetworkSample
     ) -> NetworkRates {
         let elapsed = currentSample.sampledAt.timeIntervalSince(previousSample.sampledAt)
-        guard elapsed > 0 else {
-            return NetworkRates(downloadBytesPerSecond: 0, uploadBytesPerSecond: 0)
-        }
+        let aggregateRates = GlobalMetricsMath.networkRates(
+            previousDownload: previousSample.downloadBytes,
+            previousUpload: previousSample.uploadBytes,
+            currentDownload: currentSample.downloadBytes,
+            currentUpload: currentSample.uploadBytes,
+            elapsed: elapsed
+        )
 
-        let downloadDelta = byteDelta(previous: previousSample.downloadBytes, current: currentSample.downloadBytes)
-        let uploadDelta = byteDelta(previous: previousSample.uploadBytes, current: currentSample.uploadBytes)
+        guard elapsed > 0 else {
+            return NetworkRates(
+                downloadBytesPerSecond: aggregateRates.downloadBytesPerSecond,
+                uploadBytesPerSecond: aggregateRates.uploadBytesPerSecond
+            )
+        }
 
         return NetworkRates(
-            downloadBytesPerSecond: Double(downloadDelta) / elapsed,
-            uploadBytesPerSecond: Double(uploadDelta) / elapsed
+            downloadBytesPerSecond: aggregateRates.downloadBytesPerSecond,
+            uploadBytesPerSecond: aggregateRates.uploadBytesPerSecond
         )
-    }
-
-    private func byteDelta(previous: UInt64, current: UInt64) -> UInt64 {
-        guard current >= previous else {
-            return 0
-        }
-
-        return current - previous
     }
 
     private func wifiQualityPercent() -> Double? {
@@ -247,59 +215,7 @@ final class GlobalMetricsSampler: @unchecked Sendable {
         let rssi = interface.rssiValue()
         let noise = interface.noiseMeasurement()
 
-        guard rssi < 0 else {
-            return nil
-        }
-
-        let rssiScore = ((Double(rssi) + 90) / 60) * 100
-
-        if noise < 0 {
-            let signalToNoise = max(0, rssi - noise)
-            let signalToNoiseScore = (Double(signalToNoise) / 40) * 100
-            return (rssiScore * 0.35 + signalToNoiseScore * 0.65).clamped(to: 0...100)
-        }
-
-        return rssiScore.clamped(to: 0...100)
-    }
-
-    private func calculateConnectionQuality(
-        isConnected: Bool,
-        totalBytesPerSecond: Double,
-        wifiQualityPercent: Double?
-    ) -> (percent: Double, statusLabel: String) {
-        guard isConnected else {
-            return (0, "Offline")
-        }
-
-        let activityPercent = networkActivityPercent(totalBytesPerSecond)
-        let percent: Double
-
-        if let wifiQualityPercent {
-            percent = wifiQualityPercent * 0.75 + activityPercent * 0.15 + 10
-        } else {
-            percent = 62 + min(activityPercent * 0.25, 25)
-        }
-
-        let statusLabel: String
-        if totalBytesPerSecond > 100_000 {
-            statusLabel = "Active"
-        } else if percent < 40 {
-            statusLabel = "Weak"
-        } else {
-            statusLabel = "Connected"
-        }
-
-        return (percent, statusLabel)
-    }
-
-    private func networkActivityPercent(_ bytesPerSecond: Double) -> Double {
-        guard bytesPerSecond > 0 else {
-            return 0
-        }
-
-        let referenceBytesPerSecond = 5_000_000.0
-        let normalized = log10(bytesPerSecond + 1) / log10(referenceBytesPerSecond)
-        return (normalized * 100).clamped(to: 0...100)
+        return GlobalMetricsMath.wifiQualityPercent(rssi: rssi, noise: noise)
     }
 }
 
@@ -319,10 +235,4 @@ private struct NetworkSample {
 private struct NetworkRates {
     let downloadBytesPerSecond: Double
     let uploadBytesPerSecond: Double
-}
-
-private extension Comparable {
-    func clamped(to range: ClosedRange<Self>) -> Self {
-        min(max(self, range.lowerBound), range.upperBound)
-    }
 }
