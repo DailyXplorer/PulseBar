@@ -1,0 +1,32 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Build
+        run: |
+          xcodebuild \
+            -project PulseBar.xcodeproj \
+            -scheme PulseBar \
+            -destination 'platform=macOS,arch=arm64' \
+            build
+
+      - name: Run PulseBarCore tests
+        run: |
+          if [ -d PulseBarCore ]; then
+            swift test --package-path PulseBarCore
+          else
+            echo "PulseBarCore not present yet (plan 001 pending) - skipping tests"
+          fi
