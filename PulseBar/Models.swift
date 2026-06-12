@@ -1,24 +1,7 @@
 import Foundation
 import AppKit
 import Darwin
-
-struct ProcessStartTime: Hashable {
-    let seconds: UInt64
-    let microseconds: UInt64
-
-    init(seconds: UInt64, microseconds: UInt64) {
-        self.seconds = seconds
-        self.microseconds = microseconds
-    }
-
-    init(date: Date) {
-        let interval = date.timeIntervalSince1970
-        let seconds = floor(interval)
-
-        self.seconds = UInt64(seconds)
-        self.microseconds = UInt64((interval - seconds) * 1_000_000)
-    }
-}
+import PulseBarCore
 
 enum ProcessTerminationKind: Hashable {
     case application
@@ -54,7 +37,7 @@ struct RunningProcess: Identifiable, Hashable {
     }
 
     var formattedMemory: String {
-        ByteCountFormatter.string(fromByteCount: Int64(memoryUsage), countStyle: .memory)
+        MetricsFormatting.memoryLabel(memoryUsage)
     }
 
     var formattedCPU: String {

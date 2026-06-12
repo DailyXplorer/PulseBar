@@ -7,6 +7,7 @@ struct RunningProcessesView: View {
     @State private var sortAscending = false
     @State private var showingKillConfirmation = false
     @State private var processToKill: RunningProcess?
+    @State private var displayedProcesses: [RunningProcess] = []
 
     private var searchPlaceholder: String {
         switch systemMonitor.processListMode {
@@ -35,7 +36,7 @@ struct RunningProcessesView: View {
         }
     }
 
-    private var filteredProcesses: [RunningProcess] {
+    private func recomputeDisplayedProcesses() {
         let filtered = searchText.isEmpty ?
             systemMonitor.runningProcesses :
             systemMonitor.runningProcesses.filter {
@@ -45,7 +46,7 @@ struct RunningProcessesView: View {
                 ($0.executablePath?.localizedCaseInsensitiveContains(searchText) ?? false)
             }
 
-        return filtered.sorted(by: sortPredicate)
+        displayedProcesses = filtered.sorted(by: sortPredicate)
     }
 
     private func sortPredicate(_ lhs: RunningProcess, _ rhs: RunningProcess) -> Bool {
@@ -76,8 +77,6 @@ struct RunningProcessesView: View {
     }
 
     var body: some View {
-        let displayedProcesses = filteredProcesses
-
         VStack(spacing: 0) {
             HStack {
                 SearchBoxView(searchText: $searchText, placeholder: searchPlaceholder)
@@ -162,6 +161,21 @@ struct RunningProcessesView: View {
         }
         .onChange(of: sortBy) { _, newSortOption in
             sortAscending = newSortOption == .name
+        }
+        .onAppear {
+            recomputeDisplayedProcesses()
+        }
+        .onChange(of: systemMonitor.runningProcesses) { _, _ in
+            recomputeDisplayedProcesses()
+        }
+        .onChange(of: searchText) { _, _ in
+            recomputeDisplayedProcesses()
+        }
+        .onChange(of: sortBy) { _, _ in
+            recomputeDisplayedProcesses()
+        }
+        .onChange(of: sortAscending) { _, _ in
+            recomputeDisplayedProcesses()
         }
     }
 

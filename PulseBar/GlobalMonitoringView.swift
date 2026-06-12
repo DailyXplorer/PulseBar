@@ -1,13 +1,14 @@
+import PulseBarCore
 import SwiftUI
 
 struct GlobalMonitoringView: View {
-    @EnvironmentObject var systemMonitor: SystemMonitor
+    @EnvironmentObject var metricsStore: GlobalMetricsStore
 
     private let displayedZeroNetworkThreshold = 50_000.0
 
     var body: some View {
         VStack(spacing: 0) {
-            if let metrics = systemMonitor.globalMetrics {
+            if let metrics = metricsStore.metrics {
                 metricsContent(metrics)
             } else {
                 placeholderContent
@@ -28,7 +29,7 @@ struct GlobalMonitoringView: View {
             ) {
                 MetricRingCard(
                     title: "CPU",
-                    valueLabel: percentLabel(metrics.cpuUsagePercent),
+                    valueLabel: MetricsFormatting.percentLabel(metrics.cpuUsagePercent),
                     detailLabel: "System load",
                     percent: metrics.cpuUsagePercent,
                     accentColor: .accentColor,
@@ -37,8 +38,8 @@ struct GlobalMonitoringView: View {
 
                 MetricRingCard(
                     title: "RAM",
-                    valueLabel: percentLabel(metrics.memoryUsedPercent),
-                    detailLabel: "\(byteLabel(metrics.memoryUsedBytes)) used",
+                    valueLabel: MetricsFormatting.percentLabel(metrics.memoryUsedPercent),
+                    detailLabel: "\(MetricsFormatting.memoryLabel(metrics.memoryUsedBytes)) used",
                     percent: metrics.memoryUsedPercent,
                     accentColor: .orange,
                     systemImage: "memorychip"
@@ -46,8 +47,11 @@ struct GlobalMonitoringView: View {
 
                 MetricRingCard(
                     title: "Network",
-                    valueLabel: rateLabel(metrics.downloadBytesPerSecond + metrics.uploadBytesPerSecond),
-                    detailLabel: "Down \(rateLabel(metrics.downloadBytesPerSecond))  Up \(rateLabel(metrics.uploadBytesPerSecond))",
+                    valueLabel: MetricsFormatting.rateLabel(
+                        metrics.downloadBytesPerSecond + metrics.uploadBytesPerSecond,
+                        zeroDisplayThreshold: displayedZeroNetworkThreshold
+                    ),
+                    detailLabel: "Down \(MetricsFormatting.rateLabel(metrics.downloadBytesPerSecond, zeroDisplayThreshold: displayedZeroNetworkThreshold))  Up \(MetricsFormatting.rateLabel(metrics.uploadBytesPerSecond, zeroDisplayThreshold: displayedZeroNetworkThreshold))",
                     percent: networkActivityPercent(metrics),
                     accentColor: .blue,
                     systemImage: "arrow.down.arrow.up"
@@ -55,7 +59,7 @@ struct GlobalMonitoringView: View {
 
                 MetricRingCard(
                     title: "Signal",
-                    valueLabel: percentLabel(metrics.connectionQualityPercent),
+                    valueLabel: MetricsFormatting.percentLabel(metrics.connectionQualityPercent),
                     detailLabel: metrics.connectionStatusLabel,
                     percent: metrics.connectionQualityPercent,
                     accentColor: .green,
@@ -131,28 +135,13 @@ struct GlobalMonitoringView: View {
         .padding(16)
     }
 
-    private func percentLabel(_ value: Double) -> String {
-        "\(Int(value.rounded()))%"
-    }
-
-    private func byteLabel(_ bytes: UInt64) -> String {
-        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .memory)
-    }
-
-    private func rateLabel(_ bytesPerSecond: Double) -> String {
-        let displayedBytesPerSecond = bytesPerSecond < displayedZeroNetworkThreshold ? 0 : bytesPerSecond
-        return String(format: "%.1f MB/s", displayedBytesPerSecond / 1_000_000)
-    }
-
     private func networkActivityPercent(_ metrics: GlobalSystemMetrics) -> Double {
         let bytesPerSecond = metrics.downloadBytesPerSecond + metrics.uploadBytesPerSecond
         guard bytesPerSecond >= displayedZeroNetworkThreshold else {
             return 0
         }
 
-        let referenceBytesPerSecond = 5_000_000.0
-        let normalized = log10(bytesPerSecond + 1) / log10(referenceBytesPerSecond)
-        return min(max(normalized * 100, 0), 100)
+        return GlobalMetricsMath.networkActivityPercent(bytesPerSecond)
     }
 }
 

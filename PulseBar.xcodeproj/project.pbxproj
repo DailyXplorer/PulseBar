@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		AA10000000000000000000A3 /* PulseBarCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA10000000000000000000A2 /* PulseBarCore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		C4D37DAF2E392305000486A2 /* PulseBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PulseBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -18,11 +22,19 @@
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		AA10000000000000000000A1 /* XCLocalSwiftPackageReference "PulseBarCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = PulseBarCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin PBXFrameworksBuildPhase section */
 		C4D37DAC2E392305000486A2 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA10000000000000000000A3 /* PulseBarCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +77,7 @@
 			);
 			name = PulseBar;
 			packageProductDependencies = (
+				AA10000000000000000000A2 /* PulseBarCore */,
 			);
 			productName = PulseBar;
 			productReference = C4D37DAF2E392305000486A2 /* PulseBar.app */;
@@ -96,6 +109,9 @@
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C4D37DB02E392305000486A2 /* Products */;
+			packageReferences = (
+				AA10000000000000000000A1 /* XCLocalSwiftPackageReference "PulseBarCore" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -327,6 +343,13 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA10000000000000000000A2 /* PulseBarCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PulseBarCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C4D37DA72E392305000486A2 /* Project object */;
 }
