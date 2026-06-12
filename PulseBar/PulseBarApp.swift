@@ -31,13 +31,10 @@ private struct MenuBarLabel: View {
     var body: some View {
         Group {
             if appSettings.showMenuBarCPU, let cpu = metricsStore.metrics?.cpuUsagePercent {
-                ZStack(alignment: .trailing) {
-                    Text("100%")
-                        .opacity(0)
-
-                    Text("\(Int(cpu.rounded()))%")
-                }
+                Text("\(Int(cpu.rounded()))%")
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .monospacedDigit()
+                .frame(width: 36, alignment: .trailing)
                 .accessibilityLabel("PulseBar CPU \(Int(cpu.rounded())) percent")
             } else {
                 HugeIconImage(.menuBarDashboard, size: 18)
