@@ -70,7 +70,33 @@ DEVELOPMENT_TEAM=YOURTEAMID
 
 You can also open `PulseBar.xcodeproj`, select the `PulseBar` target, set your Development Team in Signing & Capabilities, then build and copy the app to `/Applications`.
 
-No prebuilt release binary is published yet. A downloadable app should wait until there is a proper Developer ID signing and notarization flow.
+## Publishing a Release
+
+Direct-download releases are produced by `script/notarize_release.sh`. The script builds a Release app, signs it with a `Developer ID Application:` certificate, submits the zip to Apple's notary service, staples the approved ticket to the app, and writes the final zip to `dist/PulseBar-<version>.zip`.
+
+Prerequisites:
+
+- An Apple Developer Program account with a `Developer ID Application:` certificate installed in the login keychain.
+- Xcode 16 command line tools selected.
+- A one-time stored notarytool credential profile:
+
+```bash
+xcrun notarytool store-credentials <name> --apple-id <apple-id> --team-id <team-id>
+```
+
+Build, notarize, staple, and package the release with:
+
+```bash
+NOTARY_PROFILE=<name> ./script/notarize_release.sh
+```
+
+If the machine has Developer ID certificates for more than one team, pass `DEVELOPMENT_TEAM` for the release build:
+
+```bash
+DEVELOPMENT_TEAM=YOURTEAMID NOTARY_PROFILE=<name> ./script/notarize_release.sh
+```
+
+The distributable app is the zip under `dist/`. DMG packaging and update feeds are intentionally deferred; the notarized zip is the first release artifact.
 
 ## Development
 
