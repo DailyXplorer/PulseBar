@@ -28,9 +28,9 @@ struct MenuBarView: View {
                 }
             }
         }
-        .frame(width: 480, height: 600)
+        .frame(width: 480)
+        .frame(maxHeight: .infinity)
         .background(Color(NSColor.windowBackgroundColor))
-        .background(MonitoringLifecycleView())
         .onAppear {
             systemMonitor.setProcessListMode(appSettings.processListMode)
         }
@@ -91,6 +91,7 @@ private struct MenuHeaderView: View {
                 }
             }
             .help("Refresh data")
+            .accessibilityLabel("Refresh data")
 
             Button(action: {
                 NSApplication.shared.terminate(nil)
@@ -110,6 +111,7 @@ private struct MenuHeaderView: View {
                 }
             }
             .help("Quit PulseBar")
+            .accessibilityLabel("Quit PulseBar")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -149,22 +151,6 @@ private struct MenuTabBar: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(Color(NSColor.controlBackgroundColor))
-    }
-}
-
-private struct MonitoringLifecycleView: View {
-    @EnvironmentObject var appSettings: AppSettingsStore
-    @EnvironmentObject var systemMonitor: SystemMonitor
-
-    var body: some View {
-        Color.clear
-            .frame(width: 0, height: 0)
-            .onAppear {
-                systemMonitor.setCadence(.foreground)
-            }
-            .onDisappear {
-                systemMonitor.setCadence(appSettings.showMenuBarCPU ? .background : .off)
-            }
     }
 }
 

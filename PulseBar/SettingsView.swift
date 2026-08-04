@@ -44,6 +44,7 @@ struct SettingsView: View {
                         ))
                         .labelsHidden()
                         .toggleStyle(.switch)
+                        .accessibilityLabel("Show CPU in menu bar")
                     }
 
                     Divider()
@@ -64,12 +65,19 @@ struct SettingsView: View {
 
                         Spacer(minLength: 12)
 
+                        if appSettings.isLaunchAtLoginBusy {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+
                         Toggle("", isOn: Binding(
                             get: { appSettings.launchAtLoginEnabled },
                             set: { appSettings.setLaunchAtLoginEnabled($0) }
                         ))
                         .labelsHidden()
                         .toggleStyle(.switch)
+                        .disabled(appSettings.isLaunchAtLoginBusy)
+                        .accessibilityLabel("Open at login")
                     }
 
                     if let errorMessage = appSettings.launchAtLoginErrorMessage {

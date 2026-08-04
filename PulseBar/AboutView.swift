@@ -59,10 +59,11 @@ struct AboutView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             HugeIconImage(.menuBarDashboard, size: 34)
                 .foregroundColor(.accentColor)
                 .frame(width: 34, height: 34)
+                .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("PulseBar")

@@ -35,7 +35,10 @@ final class AppSettingsStore: ObservableObject {
     @Published private(set) var processListMode: ProcessListMode
     @Published private(set) var showMenuBarCPU: Bool
     @Published private(set) var launchAtLoginEnabled = false
-    @Published var launchAtLoginErrorMessage: String?
+    @Published private(set) var launchAtLoginDetail: String?
+    @Published private(set) var launchAtLoginErrorMessage: String?
+    @Published private(set) var isLaunchAtLoginBusy = true
+    private var launchAtLoginTask: Task<Void, Never>?
 
     init() {
         let storedMode = UserDefaults.standard.string(forKey: DefaultsKey.processListMode)
@@ -46,24 +49,50 @@ final class AppSettingsStore: ObservableObject {
         refresh()
     }
 
-    var launchAtLoginDetail: String? {
-        launchAtLoginEnabled ? "PulseBar will open from its current app location." : nil
+    deinit {
+        launchAtLoginTask?.cancel()
     }
 
     func refresh() {
-        launchAtLoginEnabled = LaunchAgentLoginItem.isEnabled
+        launchAtLoginTask?.cancel()
+        launchAtLoginErrorMessage = nil
+        isLaunchAtLoginBusy = true
+
+        launchAtLoginTask = Task { [weak self] in
+            let status = await LaunchAgentLoginItem.status()
+            guard !Task.isCancelled, let self else { return }
+
+            applyLaunchAtLoginStatus(status)
+            isLaunchAtLoginBusy = false
+        }
     }
 
     func setLaunchAtLoginEnabled(_ isEnabled: Bool) {
+        launchAtLoginTask?.cancel()
         launchAtLoginErrorMessage = nil
+        isLaunchAtLoginBusy = true
 
-        do {
-            try LaunchAgentLoginItem.setEnabled(isEnabled)
-        } catch {
-            launchAtLoginErrorMessage = "PulseBar could not update this setting."
+        launchAtLoginTask = Task { [weak self] in
+            guard let self else { return }
+
+            do {
+                let status = try await LaunchAgentLoginItem.setEnabled(isEnabled)
+                guard !Task.isCancelled else { return }
+
+                applyLaunchAtLoginStatus(status)
+                if status.isEnabled != isEnabled {
+                    launchAtLoginErrorMessage = "launchd did not confirm the requested Open at login state."
+                }
+            } catch {
+                let status = await LaunchAgentLoginItem.status()
+                guard !Task.isCancelled else { return }
+
+                applyLaunchAtLoginStatus(status)
+                launchAtLoginErrorMessage = "PulseBar could not update this setting. \(error.localizedDescription)"
+            }
+
+            isLaunchAtLoginBusy = false
         }
-
-        refresh()
     }
 
     func setProcessListMode(_ mode: ProcessListMode) {
@@ -78,5 +107,11 @@ final class AppSettingsStore: ObservableObject {
 
         showMenuBarCPU = isEnabled
         UserDefaults.standard.set(isEnabled, forKey: DefaultsKey.showMenuBarCPU)
+    }
+
+    private func applyLaunchAtLoginStatus(_ status: LaunchAgentLoginItem.Status) {
+        launchAtLoginEnabled = status.isEnabled
+        launchAtLoginDetail = status.detailMessage
+        launchAtLoginErrorMessage = status.problemMessage
     }
 }
