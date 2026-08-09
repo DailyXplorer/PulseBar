@@ -10,6 +10,13 @@ import Testing
     #expect(GlobalMetricsMath.byteDelta(previous: 42, current: 10) == 0)
 }
 
+@Test func byteDeltaPreserves64BitCountersBeyondUInt32() {
+    let previous = UInt64(UInt32.max) + 10
+    let current = previous + 250
+
+    #expect(GlobalMetricsMath.byteDelta(previous: previous, current: current) == 250)
+}
+
 @Test func networkRatesNormal() {
     let rates = GlobalMetricsMath.networkRates(
         previousDownload: 100,
@@ -34,6 +41,20 @@ import Testing
 
     #expect(rates.downloadBytesPerSecond == 0)
     #expect(rates.uploadBytesPerSecond == 0)
+}
+
+@Test func networkRatesPreserve64BitCountersBeyondUInt32() {
+    let previous = UInt64(UInt32.max) + 1_000
+    let rates = GlobalMetricsMath.networkRates(
+        previousDownload: previous,
+        previousUpload: previous,
+        currentDownload: previous + 4_000,
+        currentUpload: previous + 2_000,
+        elapsed: 2
+    )
+
+    #expect(rates.downloadBytesPerSecond == 2_000)
+    #expect(rates.uploadBytesPerSecond == 1_000)
 }
 
 @Test func networkInterfaceInclusionRules() {
