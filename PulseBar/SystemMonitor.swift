@@ -289,9 +289,12 @@ class SystemMonitor: ObservableObject {
 }
 
 private final class ProcessMetricsSampler: @unchecked Sendable {
+    private static let executableIconCacheCapacity = 512
     private let queue = DispatchQueue(label: "com.pulsebar.process", qos: .utility)
     private let cpuTracker = ProcessCPUTracker()
-    private var executableIconCache: [String: NSImage] = [:]
+    private let executableIconCache = BoundedLRUCache<String, NSImage>(
+        capacity: executableIconCacheCapacity
+    )
 
     func resetCPUHistory() {
         queue.async {
@@ -466,12 +469,12 @@ private final class ProcessMetricsSampler: @unchecked Sendable {
     private func icon(for executablePath: String?) -> NSImage? {
         guard let executablePath else { return nil }
 
-        if let cachedIcon = executableIconCache[executablePath] {
+        if let cachedIcon = executableIconCache.value(forKey: executablePath) {
             return cachedIcon
         }
 
         let icon = NSWorkspace.shared.icon(forFile: executablePath)
-        executableIconCache[executablePath] = icon
+        executableIconCache.insert(icon, forKey: executablePath)
         return icon
     }
 

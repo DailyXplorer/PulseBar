@@ -139,6 +139,7 @@ final class GlobalMetricsSampler: @unchecked Sendable {
         var downloadBytes: UInt64 = 0
         var uploadBytes: UInt64 = 0
         var isConnected = false
+        var didReadNetworkCounters = false
         var cursor: UnsafeMutablePointer<ifaddrs>? = firstAddress
 
         while let interfacePointer = cursor {
@@ -164,13 +165,17 @@ final class GlobalMetricsSampler: @unchecked Sendable {
             }
 
             guard Int32(address.pointee.sa_family) == AF_LINK,
-                  let dataPointer = interface.ifa_data else {
+                  let counters = read64BitNetworkCounters(interfaceName: interfaceName) else {
                 continue
             }
 
-            let data = dataPointer.assumingMemoryBound(to: if_data.self).pointee
-            downloadBytes += UInt64(data.ifi_ibytes)
-            uploadBytes += UInt64(data.ifi_obytes)
+            didReadNetworkCounters = true
+            downloadBytes += counters.downloadBytes
+            uploadBytes += counters.uploadBytes
+        }
+
+        guard didReadNetworkCounters else {
+            return nil
         }
 
         return NetworkSample(
@@ -178,6 +183,50 @@ final class GlobalMetricsSampler: @unchecked Sendable {
             uploadBytes: uploadBytes,
             sampledAt: sampledAt,
             isConnected: isConnected
+        )
+    }
+
+    private func read64BitNetworkCounters(
+        interfaceName: String
+    ) -> (downloadBytes: UInt64, uploadBytes: UInt64)? {
+        let interfaceIndex = interfaceName.withCString { if_nametoindex($0) }
+        guard interfaceIndex > 0 else {
+            return nil
+        }
+
+        var mib: [Int32] = [
+            CTL_NET,
+            PF_LINK,
+            NETLINK_GENERIC,
+            IFMIB_IFDATA,
+            Int32(interfaceIndex),
+            IFDATA_GENERAL
+        ]
+        let mibCount = u_int(mib.count)
+        var interfaceData = ifmibdata()
+        var interfaceDataSize = MemoryLayout<ifmibdata>.size
+
+        let result = mib.withUnsafeMutableBufferPointer { mibBuffer in
+            withUnsafeMutablePointer(to: &interfaceData) { interfaceDataPointer in
+                sysctl(
+                    mibBuffer.baseAddress,
+                    mibCount,
+                    interfaceDataPointer,
+                    &interfaceDataSize,
+                    nil,
+                    0
+                )
+            }
+        }
+
+        guard result == 0,
+              interfaceDataSize == MemoryLayout<ifmibdata>.size else {
+            return nil
+        }
+
+        return (
+            downloadBytes: UInt64(interfaceData.ifmd_data.ifi_ibytes),
+            uploadBytes: UInt64(interfaceData.ifmd_data.ifi_obytes)
         )
     }
 
