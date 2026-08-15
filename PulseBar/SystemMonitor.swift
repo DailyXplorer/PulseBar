@@ -85,7 +85,8 @@ class SystemMonitor: ObservableObject {
     }
 
     private func scheduleGlobalMetricsTimer(interval: TimeInterval) {
-        globalMetricsTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        globalMetricsTimer?.invalidate()
+        globalMetricsTimer = repeatingTimer(interval: interval) { [weak self] in
             Task {
                 await self?.refreshGlobalMetrics()
             }
@@ -114,11 +115,19 @@ class SystemMonitor: ObservableObject {
 
     private func scheduleProcessTimer() {
         processTimer?.invalidate()
-        processTimer = Timer.scheduledTimer(withTimeInterval: processRefreshInterval, repeats: true) { [weak self] _ in
+        processTimer = repeatingTimer(interval: processRefreshInterval) { [weak self] in
             Task {
                 await self?.refreshProcesses()
             }
         }
+    }
+
+    private func repeatingTimer(interval: TimeInterval, handler: @escaping () -> Void) -> Timer {
+        let timer = Timer(timeInterval: interval, repeats: true) { _ in
+            handler()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        return timer
     }
 
     func refreshData() async {
@@ -229,8 +238,7 @@ class SystemMonitor: ObservableObject {
     @discardableResult
     private func performSignalTermination(_ process: RunningProcess, force: Bool) -> Bool {
         guard let startTime = process.startTime,
-              let snapshot = ProcessMetricsSampler.currentSnapshot(for: process.pid),
-              snapshot.startTime == startTime else {
+              let snapshot = matchingSnapshot(pid: process.pid, startTime: startTime) else {
             actionMessage = "\(process.name) is no longer running or no longer matches the selected process."
             return false
         }
@@ -247,7 +255,12 @@ class SystemMonitor: ObservableObject {
         }
 
         let signal = force ? SIGKILL : SIGTERM
-        if Darwin.kill(process.pid, signal) == 0 {
+        guard let delivery = sendSignal(to: process.pid, startTime: startTime, signal: signal) else {
+            actionMessage = "\(process.name) is no longer running or no longer matches the selected process."
+            return false
+        }
+
+        if delivery.result == 0 {
             actionMessage = nil
 
             Task { [weak self] in
@@ -258,9 +271,27 @@ class SystemMonitor: ObservableObject {
             return true
         }
 
-        let errorMessage = String(cString: strerror(errno))
+        let errorMessage = String(cString: strerror(delivery.errorNumber))
         actionMessage = "macOS refused to \(force ? "force kill" : "terminate") \(process.name): \(errorMessage)."
         return false
+    }
+
+    private func matchingSnapshot(pid: Int32, startTime: ProcessStartTime) -> ProcessSnapshot? {
+        guard let snapshot = ProcessMetricsSampler.currentSnapshot(for: pid),
+              snapshot.startTime == startTime else {
+            return nil
+        }
+
+        return snapshot
+    }
+
+    private func sendSignal(to pid: Int32, startTime: ProcessStartTime, signal: Int32) -> (result: Int32, errorNumber: Int32)? {
+        guard matchingSnapshot(pid: pid, startTime: startTime) != nil else {
+            return nil
+        }
+
+        let result = Darwin.kill(pid, signal)
+        return (result, errno)
     }
 
     private func currentApplication(matching process: RunningProcess) -> NSRunningApplication? {
