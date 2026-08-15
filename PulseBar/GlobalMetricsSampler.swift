@@ -42,14 +42,20 @@ final class GlobalMetricsSampler: @unchecked Sendable {
             return calculateNetworkRates(previousSample: previousSample, currentSample: currentSample)
         }
 
-        guard let memory, let cpuUsagePercent, let networkRates else {
+        guard let memory, let cpuUsagePercent else {
             return nil
         }
 
-        let connectionQuality = GlobalMetricsMath.connectionQuality(
+        let displayedNetwork = GlobalMetricsMath.displayNetworkMetrics(
+            isSampleAvailable: network != nil,
             isConnected: network?.isConnected == true,
-            totalBytesPerSecond: networkRates.downloadBytesPerSecond + networkRates.uploadBytesPerSecond,
-            wifiQualityPercent: wifiQualityPercent()
+            downloadBytesPerSecond: networkRates?.downloadBytesPerSecond ?? 0,
+            uploadBytesPerSecond: networkRates?.uploadBytesPerSecond ?? 0
+        )
+        let connectionQuality = GlobalMetricsMath.connectionQuality(
+            isConnected: displayedNetwork.isConnected,
+            totalBytesPerSecond: displayedNetwork.downloadBytesPerSecond + displayedNetwork.uploadBytesPerSecond,
+            wifiQualityPercent: network == nil ? nil : wifiQualityPercent()
         )
 
         return GlobalSystemMetrics(
@@ -57,8 +63,8 @@ final class GlobalMetricsSampler: @unchecked Sendable {
             memoryUsedPercent: memory.usedPercent.clamped(to: 0...100),
             memoryUsedBytes: memory.usedBytes,
             memoryTotalBytes: memory.totalBytes,
-            downloadBytesPerSecond: max(0, networkRates.downloadBytesPerSecond),
-            uploadBytesPerSecond: max(0, networkRates.uploadBytesPerSecond),
+            downloadBytesPerSecond: displayedNetwork.downloadBytesPerSecond,
+            uploadBytesPerSecond: displayedNetwork.uploadBytesPerSecond,
             connectionQualityPercent: connectionQuality.percent.clamped(to: 0...100),
             connectionStatusLabel: connectionQuality.statusLabel,
             sampledAt: sampledAt

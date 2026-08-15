@@ -64,3 +64,55 @@ import Testing
     #expect(!GlobalMetricsMath.shouldIncludeInterface(named: "bridge100"))
     #expect(GlobalMetricsMath.shouldIncludeInterface(named: "vmenet0"))
 }
+
+@Test func missingNetworkSampleFallsBackToDisconnectedIdleRates() {
+    let metrics = GlobalMetricsMath.displayNetworkMetrics(
+        isSampleAvailable: false,
+        isConnected: true,
+        downloadBytesPerSecond: 1_000,
+        uploadBytesPerSecond: 2_000
+    )
+
+    #expect(metrics.downloadBytesPerSecond == 0)
+    #expect(metrics.uploadBytesPerSecond == 0)
+    #expect(metrics.isConnected == false)
+}
+
+@Test func availableNetworkSampleKeepsRatesAndConnectionState() {
+    let metrics = GlobalMetricsMath.displayNetworkMetrics(
+        isSampleAvailable: true,
+        isConnected: true,
+        downloadBytesPerSecond: 1_500,
+        uploadBytesPerSecond: 250
+    )
+
+    #expect(metrics.downloadBytesPerSecond == 1_500)
+    #expect(metrics.uploadBytesPerSecond == 250)
+    #expect(metrics.isConnected == true)
+}
+
+@Test func firstNetworkSampleWithoutRatesStaysConnectedAtZero() {
+    let metrics = GlobalMetricsMath.displayNetworkMetrics(
+        isSampleAvailable: true,
+        isConnected: true,
+        downloadBytesPerSecond: 0,
+        uploadBytesPerSecond: 0
+    )
+
+    #expect(metrics.downloadBytesPerSecond == 0)
+    #expect(metrics.uploadBytesPerSecond == 0)
+    #expect(metrics.isConnected == true)
+}
+
+@Test func negativeNetworkRatesAreClampedToZero() {
+    let metrics = GlobalMetricsMath.displayNetworkMetrics(
+        isSampleAvailable: true,
+        isConnected: false,
+        downloadBytesPerSecond: -10,
+        uploadBytesPerSecond: -20
+    )
+
+    #expect(metrics.downloadBytesPerSecond == 0)
+    #expect(metrics.uploadBytesPerSecond == 0)
+    #expect(metrics.isConnected == false)
+}
