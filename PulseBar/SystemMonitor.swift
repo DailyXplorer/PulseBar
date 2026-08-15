@@ -85,7 +85,8 @@ class SystemMonitor: ObservableObject {
     }
 
     private func scheduleGlobalMetricsTimer(interval: TimeInterval) {
-        globalMetricsTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        globalMetricsTimer?.invalidate()
+        globalMetricsTimer = repeatingTimer(interval: interval) { [weak self] in
             Task {
                 await self?.refreshGlobalMetrics()
             }
@@ -114,11 +115,19 @@ class SystemMonitor: ObservableObject {
 
     private func scheduleProcessTimer() {
         processTimer?.invalidate()
-        processTimer = Timer.scheduledTimer(withTimeInterval: processRefreshInterval, repeats: true) { [weak self] _ in
+        processTimer = repeatingTimer(interval: processRefreshInterval) { [weak self] in
             Task {
                 await self?.refreshProcesses()
             }
         }
+    }
+
+    private func repeatingTimer(interval: TimeInterval, handler: @escaping () -> Void) -> Timer {
+        let timer = Timer(timeInterval: interval, repeats: true) { _ in
+            handler()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        return timer
     }
 
     func refreshData() async {
