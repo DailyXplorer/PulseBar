@@ -108,6 +108,23 @@ public enum GlobalMetricsMath {
         return (percent, statusLabel)
     }
 
+    public static func displayNetworkMetrics(
+        isSampleAvailable: Bool,
+        isConnected: Bool,
+        downloadBytesPerSecond: Double,
+        uploadBytesPerSecond: Double
+    ) -> (downloadBytesPerSecond: Double, uploadBytesPerSecond: Double, isConnected: Bool) {
+        guard isSampleAvailable else {
+            return (0, 0, false)
+        }
+
+        return (
+            max(0, downloadBytesPerSecond),
+            max(0, uploadBytesPerSecond),
+            isConnected
+        )
+    }
+
     public static func networkActivityPercent(_ bytesPerSecond: Double) -> Double {
         guard bytesPerSecond > 0 else {
             return 0
