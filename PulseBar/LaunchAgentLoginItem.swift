@@ -171,7 +171,10 @@ enum LaunchAgentLoginItem {
         case .valid:
             switch readServiceState() {
             case let .loaded(configurationPath):
-                guard configurationPath == agentURL.path else {
+                guard LaunchAgentLoadedPath.matchesExpected(
+                    configurationPath,
+                    expectedPath: agentURL.path
+                ) else {
                     return .loadedFromUnexpectedConfiguration(configurationPath)
                 }
                 return .enabled
